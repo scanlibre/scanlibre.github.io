@@ -9,6 +9,7 @@ import { abrirFoto } from '../fotos.js';
 import { FILTROS } from '../imagen/filtros.js';
 import { cambiarAjuste } from '../ajustes.js';
 import { abrirRecorte } from './recorte.js';
+import { mostrarTexto } from './texto.js';
 import { puedeCompartir, compartir, descargar } from '../exportar.js';
 
 let doc = null, pagina = null, n = 1, url = null, trabajando = false;
@@ -121,6 +122,7 @@ export function iniciar() {
   $('#pagina-recortar').addEventListener('click', recortar);
   $('#pagina-mover-antes').addEventListener('click', () => mover(-1));
   $('#pagina-mover-despues').addEventListener('click', () => mover(1));
+  $('#pagina-texto').addEventListener('click', () => { if (pagina) mostrarTexto([pagina], { titulo: `Texto de la página ${n}` }); });
   $('#pagina-guardar').addEventListener('click', guardarImagen);
   $('#pagina-borrar').addEventListener('click', borrar);
 }

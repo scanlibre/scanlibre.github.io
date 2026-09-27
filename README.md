@@ -4,13 +4,14 @@
 
 Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora, y sin internet después de abrirla una vez. Se publica en GitHub Pages y, más adelante, en Google Play como TWA (igual que Mi Pisto HN).
 
-## Qué hace (Fase 1)
+## Qué hace
 
 - **Cámara con la hoja marcada en vivo.** Encuentra la hoja sola, también con sombras, sobre mesas de color o con poco contraste.
 - **Captura automática** cuando la hoja se queda quieta, y **ráfaga** para escanear un cuaderno entero pasando las páginas, sin tocar la pantalla.
 - **Enderezado real:** corrige la perspectiva y calcula la proporción verdadera de la hoja aunque la foto se haya tomado en ángulo.
 - **Esquinas a mano** con lupa; se ven sobre papel blanco y sobre fondos oscuros.
-- **Filtros:** Original, Mejorada (papel blanco sin sombras y sin saturar los colores), Gris y B/N.
+- **Filtros:** Original, Mejorada (papel blanco sin sombras y sin saturar los colores), Dibujo (para lápiz y bocetos: se ven hasta los trazos más suaves), Gris y B/N.
+- **Texto (OCR), gratis y sin internet:** copiar o compartir el texto de una página o de todo el documento, en español, inglés o los dos. Y **PDF con texto buscable**: se ve igual, pero se pueden buscar y copiar las palabras.
 - **Documentos de varias páginas:** reordenar, girar, recortar de nuevo y borrar páginas, todo gratis.
 - **PDF** en tamaño carta, A4 o con la forma de la foto, y en tres calidades. La calidad *Liviana* sirve para subir a plataformas con límite de tamaño. Las páginas en B/N van a 1 bit por píxel: nítidas y livianas (unos 50 KB por página).
 - **Compartir** directo a WhatsApp, Drive o Classroom, o descargar el PDF.
@@ -19,7 +20,7 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 
 ## Cómo funciona por dentro
 
-No usa librerías: todo está escrito para esta app (unos 150 KB de código).
+La detección, los filtros, el PDF y el respaldo están escritos para esta app, sin librerías (unos 160 KB de código). Para leer el texto se usa [Tesseract.js](https://github.com/naptha/tesseract.js), incluido en `vendor/tesseract/` (licencia Apache 2.0): no depende de ninguna CDN y funciona sin conexión.
 
 | Parte | Archivo | Qué hace |
 |---|---|---|
@@ -28,7 +29,8 @@ No usa librerías: todo está escrito para esta app (unos 150 KB de código).
 | Enderezado | `js/imagen/perspectiva.js` | Transformación de perspectiva con interpolación bilineal. |
 | Filtros | `js/imagen/filtros.js` | Estima el brillo del papel por zonas y divide por él (quita sombras), balance de blancos, y umbral local para B/N. |
 | Worker | `js/imagen/worker.js` | Las cuentas pesadas corren aparte para que la app no se trabe. |
-| PDF | `js/pdf.js` | Escritor de PDF propio: JPEG tal cual (DCTDecode) y B/N a 1 bit (FlateDecode). |
+| PDF | `js/pdf.js` | Escritor de PDF propio: JPEG tal cual (DCTDecode) y B/N a 1 bit (FlateDecode). Con OCR, cada palabra va invisible (modo 3) en su lugar, en Courier estirada al ancho de la palabra. |
+| OCR | `js/ocr.js` | Tesseract.js 7 (modelos `best_int` de español e inglés). Se carga la primera vez que se usa (unos 6 MB en español) y el service worker lo guarda para usarlo sin conexión. |
 | Respaldo | `js/respaldo.js` | ZIP propio para el respaldo. |
 | Guardado | `js/db.js` | IndexedDB, solo en el teléfono. |
 
@@ -61,6 +63,8 @@ js/imagen/          detección, geometría, enderezado y filtros (sin DOM)
 js/paginas.js       de la foto a la página guardada, con cola para las ráfagas
 js/exportar.js      PDF y compartir
 js/respaldo.js      respaldo .zip
+js/ocr.js           lector de texto (Tesseract.js)
+vendor/tesseract/   Tesseract.js, sus núcleos y los idiomas (ver LEEME.md)
 sw.js               modo sin conexión (subir VERSION al publicar cambios)
 tests/              pruebas (node:test + Playwright)
 ```
@@ -69,8 +73,8 @@ tests/              pruebas (node:test + Playwright)
 
 Lo que sigue sale de lo que la gente les pide y les reclama a CamScanner, Genius Scan y compañía.
 
-**Fase 2**
-- OCR con Tesseract.js 7 (español e inglés): copiar el texto y PDF con texto buscable. Viene del lector de facturas de Mi Pisto HN.
+**Fase 2** (en curso)
+- ✅ OCR con Tesseract.js 7 (español e inglés): copiar el texto y PDF con texto buscable.
 - Carpetas por clase y nombre automático («Cálculo – 27 sep»).
 - PDF con contraseña, gratis.
 - Brillo y contraste a mano, guardables como perfil.

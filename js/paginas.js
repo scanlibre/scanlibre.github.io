@@ -5,7 +5,7 @@
 
 import { detectar, procesar } from './motor.js';
 import { abrirFoto, aCanvas, aImageData, canvasABlob, imageDataABlob, normalizarFoto, soltarCanvas } from './fotos.js';
-import { agregarPagina, guardarDocumento, guardarPagina, obtenerDocumento } from './db.js';
+import { agregarPagina, guardarDocumento, guardarPagina, obtenerDocumento, obtenerPagina } from './db.js';
 import { nuevoId, nombrePorDefecto } from './util.js';
 import { ajustes } from './ajustes.js';
 
@@ -50,11 +50,33 @@ export async function reprocesar(pagina, cambios) {
   const bitmap = await abrirFoto(pagina.original);
   const r = await renderizar(bitmap, datos);
   bitmap.close?.();
-  const nueva = { ...pagina, ...datos, ...r };
+  // El texto leído ya no corresponde a la página nueva
+  const nueva = { ...pagina, ...datos, ...r, ocr: null };
   await guardarPagina(nueva);
   const doc = await obtenerDocumento(pagina.docId);
   if (doc) { doc.modificado = Date.now(); await guardarDocumento(doc); }
   return nueva;
+}
+
+/** Qué versión de la página es: si cambia (filtro, recorte, giro), el texto leído deja de servir */
+const versionDe = p => `${p.filtro}|${p.rotacion}|${p.procAncho}x${p.procAlto}|${JSON.stringify(p.esquinas)}`;
+
+/**
+ * Texto de la página con el lector de texto (OCR). Si ya se leyó con ese
+ * idioma, no se vuelve a leer. El resultado se guarda con la página.
+ */
+export async function textoDePagina(pagina, { idioma = 'spa', alAvanzar } = {}) {
+  if (pagina.ocr && pagina.ocr.idioma === idioma && pagina.ocr.version === versionDe(pagina)) return pagina.ocr;
+  const { leerTexto } = await import('./ocr.js');
+  const version = versionDe(pagina);
+  const ocr = { ...(await leerTexto(pagina.procesada, { idioma, alAvanzar })), ancho: pagina.procAncho, alto: pagina.procAlto, version };
+  // Si mientras se leía la página cambió (otro filtro, otro recorte), este texto no se guarda
+  const actual = await obtenerPagina(pagina.id);
+  if (actual && versionDe(actual) === version) {
+    await guardarPagina({ ...actual, ocr });
+    if (versionDe(pagina) === version) pagina.ocr = ocr;
+  }
+  return ocr;
 }
 
 export async function nuevoDocumento() {

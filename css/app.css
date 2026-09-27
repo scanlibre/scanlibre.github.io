@@ -338,7 +338,7 @@ img { display: block; }
 .filtro[aria-pressed="true"] { background: var(--marca); color: var(--marca-texto); border-color: transparent; }
 
 .herramientas {
-  display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px;
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
   padding: 6px 8px calc(8px + var(--seguro-abajo));
   border-top: 1px solid var(--borde); background: var(--fondo);
 }
@@ -354,6 +354,7 @@ img { display: block; }
 /* ── Hojas (diálogos desde abajo) ───────────────────────────────── */
 .hoja {
   width: 100%; max-width: 520px; margin: auto auto 0;
+  max-height: 94vh; max-height: 94dvh; overflow-y: auto; overscroll-behavior: contain;
   padding: 20px 20px calc(20px + var(--seguro-abajo));
   border: 0; border-radius: 22px 22px 0 0;
   background: var(--superficie); color: var(--texto);
@@ -408,6 +409,12 @@ img { display: block; }
 .resultado-pdf strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .resultado-pdf small { color: var(--texto-2); }
 
+.idiomas { display: flex; gap: 6px; margin: 4px 0 8px; }
+.idiomas .filtro { flex: 1 0 auto; }
+.texto-leido {
+  min-height: 220px; max-height: 45vh; padding: 12px 14px; resize: vertical;
+  font-size: 0.98rem; line-height: 1.5; white-space: pre-wrap;
+}
 .acerca p { color: var(--texto-2); margin: 8px 0; }
 .acerca ul { margin: 8px 0; padding-left: 20px; color: var(--texto-2); }
 .acerca .diagnostico { font-size: 0.8rem; }

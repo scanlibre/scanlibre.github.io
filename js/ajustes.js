@@ -7,7 +7,9 @@ const FABRICA = {
   rafaga: false,          // varias fotos seguidas sin parar a revisar el recorte
   filtro: 'mejorada',     // filtro de las páginas nuevas
   pdfTamano: 'carta',
-  pdfCalidad: 'normal'
+  pdfCalidad: 'normal',
+  pdfTexto: false,        // PDF con el texto leído (se puede buscar y copiar)
+  ocrIdioma: 'spa'
 };
 
 let actuales = null;

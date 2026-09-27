@@ -22,10 +22,11 @@ async function comprimir(bytes) {
 }
 
 /**
+ * @param conTexto  si las páginas traen `ocr`, el PDF lleva el texto invisible encima (se puede buscar)
  * @param alAvanzar (hechas, total) para mostrar el avance
  * @returns Blob del PDF
  */
-export async function generarPDF(doc, paginas, { tamano = 'carta', calidad = 'normal' } = {}, alAvanzar) {
+export async function generarPDF(doc, paginas, { tamano = 'carta', calidad = 'normal', conTexto = false } = {}, alAvanzar) {
   const cfg = CALIDADES[calidad] || CALIDADES.normal;
   const partes = [];
   for (let i = 0; i < paginas.length; i++) {
@@ -41,6 +42,7 @@ export async function generarPDF(doc, paginas, { tamano = 'carta', calidad = 'no
       const b = await canvasABlob(c, 'image/jpeg', cfg.jpeg);
       partes.push({ tipo: 'jpeg', bytes: new Uint8Array(await b.arrayBuffer()) });
     }
+    if (conTexto && p.ocr?.lineas?.length) partes[partes.length - 1].texto = p.ocr;
     c.width = c.height = 0; // soltar la memoria del canvas ya
   }
   alAvanzar?.(paginas.length, paginas.length);

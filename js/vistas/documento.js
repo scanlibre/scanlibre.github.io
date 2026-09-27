@@ -4,7 +4,8 @@
 import { $, el, icono, aviso, confirmar, pedirTexto, menu, hoja, paginasTexto, fechaCorta, tamanoLegible, nombreArchivo } from '../util.js';
 import { obtenerDocumento, guardarDocumento, paginasDe, borrarDocumento } from '../db.js';
 import { ir, volver } from '../rutas.js';
-import { eventosPaginas, pendientesEnCola, importarArchivos } from '../paginas.js';
+import { eventosPaginas, pendientesEnCola, importarArchivos, textoDePagina } from '../paginas.js';
+import { mostrarTexto } from './texto.js';
 import { nuevaSesion } from './camara.js';
 import { elegirArchivos } from '../archivos.js';
 import { ajustes, cambiarAjuste } from '../ajustes.js';
@@ -87,9 +88,15 @@ async function renombrar() {
 
 async function masOpciones() {
   const opcion = await menu([
+    { valor: 'texto', texto: 'Copiar el texto de todo el documento', icono: 'texto' },
     { valor: 'renombrar', texto: 'Cambiar el nombre', icono: 'editar' },
     { valor: 'borrar', texto: 'Eliminar el documento', icono: 'basura', peligro: true }
   ]);
+  if (opcion === 'texto') {
+    const paginas = await paginasDe(await obtenerDocumento(docId));
+    if (!paginas.length) return aviso('El documento todavía no tiene páginas.');
+    return mostrarTexto(paginas, { titulo: 'Texto del documento' });
+  }
   if (opcion === 'renombrar') return renombrar();
   if (opcion === 'borrar') {
     const doc = await obtenerDocumento(docId);
@@ -106,7 +113,7 @@ async function crearPDF() {
   const doc = await obtenerDocumento(docId);
   const paginas = await paginasDe(doc);
   if (!paginas.length) return;
-  const eleccion = { tamano: ajustes().pdfTamano, calidad: ajustes().pdfCalidad };
+  const eleccion = { tamano: ajustes().pdfTamano, calidad: ajustes().pdfCalidad, texto: ajustes().pdfTexto };
 
   await hoja(cerrar => {
     const grupo = (titulo, clave, valores, fila) => {
@@ -121,16 +128,44 @@ async function crearPDF() {
       });
       return el('div', { class: 'grupo' }, el('h3', { class: 'grupo-titulo', text: titulo }), el('div', { class: 'opciones' + (fila ? ' opciones-fila' : '') }, botones));
     };
+    const conTexto = el('button', { class: 'opcion', 'aria-pressed': String(eleccion.texto), onclick: () => {
+      eleccion.texto = !eleccion.texto;
+      conTexto.setAttribute('aria-pressed', String(eleccion.texto));
+    } },
+      el('strong', { text: 'Texto buscable' }),
+      el('small', { text: 'Para buscar y copiar palabras dentro del PDF. Lee el texto de cada página, así que tarda un poco más.' }));
     const barra = el('span');
     const progreso = el('div', { class: 'progreso', hidden: true }, barra);
+    const estado = el('p', { class: 'hoja-detalle', hidden: true, 'aria-live': 'polite' });
     const resultado = el('div');
+    const avance = x => { barra.style.width = `${Math.round(100 * x)}%`; };
     const crear = el('button', { class: 'boton boton-primario', onclick: async () => {
       crear.disabled = true;
       progreso.hidden = false;
       cambiarAjuste('pdfTamano', eleccion.tamano);
       cambiarAjuste('pdfCalidad', eleccion.calidad);
+      cambiarAjuste('pdfTexto', eleccion.texto);
       try {
-        const blob = await generarPDF(doc, paginas, eleccion, (hechas, total) => { barra.style.width = `${Math.round(100 * hechas / total)}%`; });
+        // Con texto: primero se lee cada página (lo ya leído no se vuelve a leer)
+        let conOcr = paginas;
+        const parteOcr = eleccion.texto ? 0.7 : 0;
+        if (eleccion.texto) {
+          estado.hidden = false;
+          conOcr = [];
+          for (let i = 0; i < paginas.length; i++) {
+            const ocr = await textoDePagina(paginas[i], {
+              idioma: ajustes().ocrIdioma,
+              alAvanzar: ({ etapa, progreso: x }) => {
+                avance(parteOcr * (i + (etapa === 'leyendo' ? x : 0)) / paginas.length);
+                estado.textContent = etapa === 'preparando' ? 'Preparando el lector de texto…' : `Leyendo el texto: página ${i + 1} de ${paginas.length}`;
+              }
+            });
+            conOcr.push({ ...paginas[i], ocr });
+          }
+          estado.textContent = 'Armando el PDF…';
+        }
+        const blob = await generarPDF(doc, conOcr, { ...eleccion, conTexto: eleccion.texto }, (hechas, total) => avance(parteOcr + (1 - parteOcr) * hechas / total));
+        estado.hidden = true;
         const nombre = nombreArchivo(doc.nombre, 'pdf');
         progreso.hidden = true;
         crear.hidden = true;
@@ -145,18 +180,20 @@ async function crearPDF() {
             } }, icono('compartir'), 'Compartir')));
       } catch (e) {
         console.error(e);
-        aviso('No se pudo crear el PDF: ' + e.message, 'error');
+        aviso('No se pudo crear el PDF: ' + (e.message || e), 'error');
         crear.disabled = false;
         progreso.hidden = true;
+        estado.hidden = true;
       }
     } }, icono('pdf'), 'Crear PDF');
     const opciones = el('div', {},
       grupo('Tamaño de hoja', 'tamano', TAMANOS_HOJA, true),
-      grupo('Calidad', 'calidad', CALIDADES, false));
+      grupo('Calidad', 'calidad', CALIDADES, false),
+      el('div', { class: 'grupo' }, el('h3', { class: 'grupo-titulo', text: 'Texto' }), el('div', { class: 'opciones' }, conTexto)));
     return [
       el('h2', { class: 'hoja-titulo', text: 'Crear PDF' }),
       el('p', { class: 'hoja-detalle', text: `${doc.nombre} · ${paginasTexto(paginas.length)}` }),
-      opciones, progreso, resultado,
+      opciones, progreso, estado, resultado,
       el('div', { class: 'hoja-botones' }, crear)
     ];
   });
