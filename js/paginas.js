@@ -3,13 +3,22 @@
 // Las fotos en ráfaga o importadas pasan por una cola, una por una, para no
 // llenar la memoria del teléfono.
 
-import { detectar, procesar } from './motor.js';
+import { detectar, procesar, nitidez as medir } from './motor.js';
+import { UMBRAL_BORROSA } from './imagen/nitidez.js';
 import { abrirFoto, aCanvas, aImageData, canvasABlob, imageDataABlob, normalizarFoto, soltarCanvas } from './fotos.js';
 import { agregarPagina, guardarDocumento, guardarPagina, obtenerDocumento, obtenerPagina } from './db.js';
 import { nuevoId, nombrePorDefecto } from './util.js';
 import { ajustes } from './ajustes.js';
 
 export const TODA_LA_FOTO = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }];
+
+/** ¿La página salió borrosa? (en un dibujo a lápiz lo suave es normal: no se avisa) */
+export const esBorrosa = p => p.filtro !== 'dibujo' && typeof p.nitidez === 'number' && p.nitidez < UMBRAL_BORROSA;
+
+/** ¿La hoja de esta foto se ve borrosa? (a poca resolución, para avisar antes de guardar) */
+export async function fotoBorrosa(fuente, esquinas) {
+  return (await medir(aImageData(fuente, 1600), esquinas)).borrosa;
+}
 
 /** Busca la hoja en la foto (canvas o bitmap). Devuelve las esquinas o null */
 export async function buscarHoja(fuente) {
@@ -19,7 +28,7 @@ export async function buscarHoja(fuente) {
 
 /** Endereza y filtra la foto; devuelve los Blob de la página y de su miniatura */
 async function renderizar(fuente, { esquinas, filtro, rotacion }) {
-  const res = await procesar(aImageData(fuente), { esquinas, filtro, rotacion, maxLado: 3000 });
+  const { imagen: res, nitidez } = await procesar(aImageData(fuente), { esquinas, filtro, rotacion, maxLado: 3000 });
   // El blanco y negro se guarda en PNG: sin pérdida y liviano
   const procesada = await imageDataABlob(res, filtro === 'bn' ? 'image/png' : 'image/jpeg', 0.9);
   const lienzo = document.createElement('canvas');
@@ -29,7 +38,7 @@ async function renderizar(fuente, { esquinas, filtro, rotacion }) {
   soltarCanvas(lienzo);
   const miniatura = await canvasABlob(chico, 'image/jpeg', 0.8);
   soltarCanvas(chico);
-  return { procesada, procAncho: res.width, procAlto: res.height, miniatura };
+  return { procesada, procAncho: res.width, procAlto: res.height, miniatura, nitidez };
 }
 
 /**

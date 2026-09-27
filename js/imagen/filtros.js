@@ -46,6 +46,22 @@ function recorrerSuave(cuadro, gw, gh, bloque, w, h, alHacerFila) {
   }
 }
 
+/** Máximo en un cuadrado de ±radio alrededor de cada celda (por filas y columnas) */
+function maximoEnRadio(c, gw, gh, radio) {
+  const t = new Float32Array(c.length), out = new Float32Array(c.length);
+  for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+    let m = 0;
+    for (let d = -radio; d <= radio; d++) { const xx = x + d; if (xx >= 0 && xx < gw) m = Math.max(m, c[y * gw + xx]); }
+    t[y * gw + x] = m;
+  }
+  for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+    let m = 0;
+    for (let d = -radio; d <= radio; d++) { const yy = y + d; if (yy >= 0 && yy < gh) m = Math.max(m, t[yy * gw + x]); }
+    out[y * gw + x] = m;
+  }
+  return out;
+}
+
 function desenfocarCuadro(c, gw, gh) {
   const t = new Float32Array(c.length);
   for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
@@ -64,30 +80,48 @@ function desenfocarCuadro(c, gw, gh) {
  * papel es lo más claro); los bloques mucho más oscuros que sus vecinos (una
  * foto, una tabla rellena) no son papel y se rellenan con los de alrededor.
  */
-function fondoDelPapel(L, w, h) {
-  const bloque = Math.max(4, Math.round(Math.max(w, h) / 48));
+function fondoDelPapel(L, w, h, img) {
+  // Bloques de 1/32 del lado corto (mínimo 16 px) para seguir sombras que
+  // cambian rápido, como la del lomo de un libro, sin comerse trazos gruesos
+  const bloque = Math.max(16, Math.round(Math.min(w, h) / 32));
   const gw = Math.ceil(w / bloque), gh = Math.ceil(h / bloque);
-  const c = new Float32Array(gw * gh);
+  const c = new Float32Array(gw * gh), color = new Float32Array(gw * gh);
   const hist = new Uint32Array(256);
+  const d = img.data;
   for (let by = 0; by < gh; by++) for (let bx = 0; bx < gw; bx++) {
     hist.fill(0);
     const xa = bx * bloque, xb = Math.min(w, xa + bloque), ya = by * bloque, yb = Math.min(h, ya + bloque);
-    for (let y = ya; y < yb; y++) for (let x = xa; x < xb; x++) hist[L[y * w + x]]++;
+    let sat = 0;
+    for (let y = ya; y < yb; y++) for (let x = xa; x < xb; x++) {
+      const i = y * w + x, j = i * 4;
+      hist[L[i]]++;
+      sat += Math.max(d[j], d[j + 1], d[j + 2]) - Math.min(d[j], d[j + 1], d[j + 2]);
+    }
+    color[by * gw + bx] = sat / ((xb - xa) * (yb - ya));
     const meta = (xb - xa) * (yb - ya) * 0.1;
     let acum = 0, v = 255;
     for (; v > 0; v--) { acum += hist[v]; if (acum >= meta) break; }
     c[by * gw + bx] = v;
   }
-  // Bloques que no son papel: mucho más oscuros que el más claro de su vecindario (5×5)
+  // Bloques que no son papel, comparados con el papel más claro de una zona
+  // amplia (un sexto de la hoja a cada lado, así un recuadro grande no se
+  // compara solo consigo mismo):
+  //  · menos de la mitad de brillo: una foto o una zona muy oscura;
+  //  · de color y algo más oscuros: una barra o un recuadro de color, que
+  //    conserva su color.
+  // Una sombra es gris, aunque sea fuerte como la del lomo de un libro: sigue
+  // siendo papel y se aclara.
+  const radio = Math.max(2, Math.round(Math.max(gw, gh) / 6));
+  const cerca = maximoEnRadio(c, gw, gh, radio);
+  // Y el papel de toda la hoja (percentil 90 de los bloques): un recuadro más
+  // grande que la zona amplia tampoco se compara consigo mismo
+  const global = [...c].sort((a, b) => a - b)[Math.floor(c.length * 0.9)];
+  const ref = cerca.map(v => Math.max(v, 0.92 * global));
   const papel = new Uint8Array(gw * gh);
   let hayPapel = false;
-  for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
-    let max = 0;
-    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
-      const yy = y + dy, xx = x + dx;
-      if (yy >= 0 && yy < gh && xx >= 0 && xx < gw) max = Math.max(max, c[yy * gw + xx]);
-    }
-    if (c[y * gw + x] >= 0.72 * max && c[y * gw + x] > 40) { papel[y * gw + x] = 1; hayPapel = true; }
+  for (let i = 0; i < gw * gh; i++) {
+    const v = c[i], deColor = color[i] > 25;
+    if (v > 40 && v >= 0.5 * ref[i] && !(deColor && v < 0.85 * ref[i])) { papel[i] = 1; hayPapel = true; }
   }
   if (hayPapel) {
     let faltan = true;
@@ -107,7 +141,7 @@ function fondoDelPapel(L, w, h) {
       for (const [i, v] of nuevos) { c[i] = v; papel[i] = 1; }
     }
   }
-  const suave = desenfocarCuadro(desenfocarCuadro(c, gw, gh), gw, gh);
+  const suave = desenfocarCuadro(c, gw, gh);
   for (let i = 0; i < suave.length; i++) if (suave[i] < 16) suave[i] = 16;
   return { cuadro: suave, gw, gh, bloque };
 }
@@ -150,13 +184,15 @@ for (let i = 0; i < 1024; i++) {
 
 /**
  * Papel blanco y parejo sin tocar los colores: la curva se aplica solo al
- * brillo y a cada canal se le devuelve su diferencia de color original. Si la
- * curva se aplicara canal por canal, los colores quedarían saturados.
+ * brillo y los tres canales se escalan en la misma proporción, así el tono y
+ * la saturación quedan iguales. Si la curva se aplicara canal por canal (o si
+ * se conservara la diferencia de color mientras el brillo baja), los colores
+ * quedarían saturados.
  */
 function realzar(img, curva) {
   const { data, width: w, height: h } = img;
   const L = luminancia(img);
-  const fondo = fondoDelPapel(L, w, h);
+  const fondo = fondoDelPapel(L, w, h, img);
   const [gr, gg, gb] = gananciasDeBlanco(img, L, w, h, fondo);
   const out = new Uint8ClampedArray(data.length);
   recorrerSuave(fondo.cuadro, fondo.gw, fondo.gh, fondo.bloque, w, h, (fila, y) => {
@@ -166,7 +202,7 @@ function realzar(img, curva) {
       const l = 0.299 * r + 0.587 * g + 0.114 * b;
       const nuevo = curva[Math.min(1023, l * 4 | 0)];
       // Cerca del blanco el color se apaga para que el papel quede limpio
-      const color = nuevo > 245 ? (255 - nuevo) / 10 : 1;
+      const color = (nuevo > 245 ? (255 - nuevo) / 10 : 1) * nuevo / Math.max(1, l);
       out[j] = nuevo + (r - l) * color;
       out[j + 1] = nuevo + (g - l) * color;
       out[j + 2] = nuevo + (b - l) * color;
@@ -180,7 +216,7 @@ function realzar(img, curva) {
 function luminanciaPareja(img) {
   const { width: w, height: h } = img;
   const L = luminancia(img);
-  const fondo = fondoDelPapel(L, w, h);
+  const fondo = fondoDelPapel(L, w, h, img);
   const N = new Uint8ClampedArray(w * h);
   recorrerSuave(fondo.cuadro, fondo.gw, fondo.gh, fondo.bloque, w, h, (fila, y) => {
     for (let x = 0, i = y * w; x < w; x++, i++) N[i] = L[i] * 255 / fila[x];
@@ -200,28 +236,41 @@ function gris(img) {
 }
 
 /**
- * Blanco y negro para texto: umbral local (Bradley) sobre la luminancia ya
- * pareja. Lo muy oscuro siempre es tinta y lo casi blanco siempre es papel;
- * en medio decide el promedio de la zona, así se ven hasta trazos de lápiz.
+ * Blanco y negro para texto con el umbral de Sauvola sobre la luminancia ya
+ * pareja: en cada zona el corte depende del promedio y de cuánto varía. Donde
+ * solo hay papel (varía poco) el corte baja y el papel queda limpio; donde hay
+ * letras (varía mucho) el corte sube y se ven hasta las letras suaves o algo
+ * borrosas. Una sombra que quedó (el lomo de un libro) varía poco: no se pinta
+ * de negro.
  */
+const K_SAUVOLA = 0.2, R_SAUVOLA = 128;
+
 function blancoYNegro(img) {
   const { width: w, height: h } = img;
   const N = luminanciaPareja(img);
-  // Promedio local en una versión 4 veces más chica (rápido y suficiente)
-  const r = 4, sw = Math.ceil(w / r), sh = Math.ceil(h / r);
-  const peq = new Float32Array(sw * sh);
+  // Promedio y variación en una versión 2 veces más chica (rápido y suficiente)
+  const r = 2, sw = Math.ceil(w / r), sh = Math.ceil(h / r);
+  const m1 = new Float32Array(sw * sh), m2 = new Float32Array(sw * sh);
   for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) {
-    let s = 0, n = 0;
-    for (let yy = y * r; yy < Math.min(h, y * r + r); yy++) for (let xx = x * r; xx < Math.min(w, x * r + r); xx++) { s += N[yy * w + xx]; n++; }
-    peq[y * sw + x] = s / n;
+    let s = 0, s2 = 0, n = 0;
+    for (let yy = y * r; yy < Math.min(h, y * r + r); yy++) for (let xx = x * r; xx < Math.min(w, x * r + r); xx++) {
+      const v = N[yy * w + xx]; s += v; s2 += v * v; n++;
+    }
+    m1[y * sw + x] = s / n; m2[y * sw + x] = s2 / n;
   }
-  const radio = Math.max(2, Math.round(Math.max(sw, sh) / 40));
-  const media = cajaSeparable(peq, sw, sh, radio);
+  // Ventana de unas 2 o 3 alturas de letra: 1/30 del lado corto
+  const radio = Math.max(4, Math.round(Math.min(sw, sh) / 30));
+  const media = cajaSeparable(m1, sw, sh, radio), media2 = cajaSeparable(m2, sw, sh, radio);
+  const corte = new Float32Array(sw * sh);
+  for (let i = 0; i < corte.length; i++) {
+    const desv = Math.sqrt(Math.max(0, media2[i] - media[i] * media[i]));
+    corte[i] = media[i] * (1 + K_SAUVOLA * (desv / R_SAUVOLA - 1));
+  }
   const out = new Uint8ClampedArray(w * h * 4);
-  recorrerSuave(media, sw, sh, r, w, h, (fila, y) => {
+  recorrerSuave(corte, sw, sh, r, w, h, (fila, y) => {
     for (let x = 0, i = y * w, j = y * w * 4; x < w; x++, i++, j += 4) {
       const v = N[i];
-      const tinta = v < 100 || (v < 215 && v < fila[x] * 0.78);
+      const tinta = v < 40 || (v < 248 && v < fila[x]);
       const c = tinta ? 0 : 255;
       out[j] = out[j + 1] = out[j + 2] = c; out[j + 3] = 255;
     }

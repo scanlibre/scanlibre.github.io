@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { crearEntorno, videoDePrueba, leerBase } from './ayuda.js';
+import { crearEntorno, videoDePrueba, leerBase, fotoDePrueba, importarFoto } from './ayuda.js';
 
 describe('La cámara', () => {
   let env;
@@ -15,6 +15,7 @@ describe('La cámara', () => {
     await esperarHoja(page);
     await page.click('#camara-disparar');
     await page.waitForSelector('#vista-recorte:not([hidden])', { timeout: 20000 });
+    assert.equal(await page.isVisible('#recorte-borrosa'), false, 'la foto es nítida: no avisa');
     await page.click('#recorte-listo');
     await page.waitForFunction(() => document.querySelector('#camara-cuenta').textContent === '1', null, { timeout: 20000 });
     await page.click('#camara-listo');
@@ -67,6 +68,36 @@ describe('La cámara', () => {
     assert.equal(await page.textContent('#camara-cuenta'), '1');
   });
 
+  it('una página borrosa se vuelve a tomar y queda en su mismo lugar', async () => {
+    const page = await env.pagina();
+    await importarFoto(page, fotoDePrueba(2).ruta, fotoDePrueba(1, 'borrosa.png', { borrosa: true }).ruta);
+    const antes = await leerBase(page);
+    await page.click('#doc-paginas li:nth-child(2) .miniatura');
+    await page.click('#pagina-retomar');
+    await esperarHoja(page);
+    await page.click('#camara-disparar');
+    await page.waitForSelector('#vista-recorte:not([hidden])', { timeout: 20000 });
+    await page.click('#recorte-listo');
+    await page.waitForSelector('#vista-pagina:not([hidden])', { timeout: 20000 });
+    await page.waitForFunction(() => document.querySelector('#pagina-titulo').textContent === 'Página 2 de 2');
+    assert.equal(await page.isVisible('#pagina-borrosa'), false, 'ya no está borrosa');
+    const despues = await leerBase(page);
+    assert.deepEqual(despues.documentos[0].paginas, antes.documentos[0].paginas, 'mismas páginas, mismo orden');
+    const p2 = despues.paginas.find(p => p.id === antes.documentos[0].paginas[1]);
+    assert.ok(p2.nitidez > 0.25, `nitidez nueva ${p2.nitidez}`);
+    // Atrás vuelve al documento, no a la cámara
+    await page.click('#pagina-atras');
+    await page.waitForSelector('#vista-documento:not([hidden])');
+  });
+
+  it('el disparador no toma fotos antes de que la cámara tenga imagen', async () => {
+    const page = await env.pagina();
+    await page.click('#inicio-escanear');
+    assert.equal(await page.isDisabled('#camara-disparar'), true);
+    await page.waitForSelector('#camara-disparar:not([disabled])', { timeout: 20000 });
+    assert.ok(await page.evaluate(() => document.querySelector('#camara-video').videoWidth > 0));
+  });
+
   it('volver atrás desde la cámara apaga la cámara', async () => {
     const page = await env.pagina();
     await page.click('#inicio-escanear');
@@ -74,6 +105,24 @@ describe('La cámara', () => {
     await page.goBack();
     await page.waitForSelector('#vista-inicio:not([hidden])');
     assert.equal(await page.evaluate(() => document.querySelector('#camara-video').srcObject), null);
+  });
+});
+
+describe('Cámara que no enfoca', () => {
+  let env;
+  before(async () => { env = await crearEntorno({ video: videoDePrueba(1, { borrosa: true }) }); });
+  after(async () => { await env.cerrar(); });
+
+  it('si la foto sale borrosa, el recorte avisa y ofrece repetirla', async () => {
+    const page = await env.pagina();
+    await page.click('#inicio-escanear');
+    await page.waitForSelector('#camara-disparar:not([disabled])', { timeout: 20000 });
+    await page.click('#camara-disparar');
+    await page.waitForSelector('#vista-recorte:not([hidden])', { timeout: 20000 });
+    await page.waitForSelector('#recorte-borrosa:not([hidden])');
+    await page.click('#recorte-repetir');
+    await page.waitForSelector('#vista-camara:not([hidden])');
+    assert.equal(await page.textContent('#camara-cuenta'), '0', 'no se guardó la foto borrosa');
   });
 });
 

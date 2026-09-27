@@ -8,10 +8,10 @@
 import { $, aviso } from '../util.js';
 import { ir, volver } from '../rutas.js';
 import { ajustes, cambiarAjuste } from '../ajustes.js';
-import { detectar } from '../motor.js';
+import { detectar, nitidez } from '../motor.js';
 import { aCanvas, aImageData, canvasABlob, normalizarFoto, soltarCanvas } from '../fotos.js';
-import { buscarHoja, crearPagina, encolar, importarArchivos, nuevoDocumento, pendientesEnCola } from '../paginas.js';
-import { agregarPagina } from '../db.js';
+import { buscarHoja, crearPagina, encolar, importarArchivos, nuevoDocumento, pendientesEnCola, fotoBorrosa, esBorrosa, TODA_LA_FOTO } from '../paginas.js';
+import { agregarPagina, reemplazarPagina } from '../db.js';
 import { elegirArchivos } from '../archivos.js';
 import { abrirRecorte } from './recorte.js';
 
@@ -21,6 +21,7 @@ const pista = $('#camara-pista');
 
 let sesion = null;      // { docId, origen: 'inicio' | 'doc', cantidad, ultima (url) }
 let flujo = null, capturador = null, fotoCompletaFalla = false, motivoFalla = '';
+let enfoques = [], midiendo = false, intentosEnfoque = 0;
 let activa = false, capturando = false, detectando = false, ultimaDeteccion = 0;
 let vivas = null, perdidas = 0, quietaDesde = 0;
 // Captura automática: después de una foto hay que pasar a otra hoja antes de la siguiente
@@ -36,9 +37,13 @@ export function diagnosticoCamara() {
   try { return JSON.parse(localStorage.getItem('scanlibre_camara')); } catch (e) { return null; }
 }
 
-export function nuevaSesion(docId, origen) {
+/**
+ * @param origen 'inicio' | 'doc' | 'pagina' (a dónde volver al terminar)
+ * @param reemplazar { id, n } para volver a tomar esa página en su mismo lugar
+ */
+export function nuevaSesion(docId, origen, reemplazar = null) {
   if (sesion?.ultima) URL.revokeObjectURL(sesion.ultima);
-  sesion = { docId, origen, cantidad: 0, ultima: null };
+  sesion = { docId, origen, cantidad: 0, ultima: null, reemplazar };
   lista = true; firmaUltima = null; pausaHasta = 0;
 }
 
@@ -92,10 +97,15 @@ async function encender() {
   video.srcObject = nuevo;
   try { await video.play(); } catch (e) {}
   if (flujo !== nuevo) return;
+  // El disparador se habilita recién con imagen: una foto antes saldría vacía
+  if (!video.videoWidth) await new Promise(r => video.addEventListener('loadeddata', r, { once: true }));
+  if (flujo !== nuevo) return;
+  $('#camara-disparar').disabled = false;
   const pistaVideo = nuevo.getVideoTracks()[0];
   capturador = conFotoCompleta ? new ImageCapture(pistaVideo) : null;
   let capacidades = {};
   try { capacidades = pistaVideo.getCapabilities?.() || {}; } catch (e) {}
+  enfoques = capacidades.focusMode || [];
   if (capacidades.focusMode?.includes('continuous')) {
     pistaVideo.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
   }
@@ -108,6 +118,7 @@ async function encender() {
 
 function apagar() {
   intento++;
+  $('#camara-disparar').disabled = true;
   if (flujo) flujo.getTracks().forEach(t => t.stop());
   flujo = null; capturador = null;
   video.srcObject = null;
@@ -175,13 +186,65 @@ function alDetectar(r, img) {
     quietaDesde = ahora;
   }
   if (ajustes().autoCaptura && lista) {
-    if (ahora - quietaDesde > 1200) disparar();
+    if (ahora - quietaDesde > 1200) capturarSiEstaNitida();
     else ponerPista('No te muevas…', true);
   } else if (ajustes().autoCaptura) {
     ponerPista('Pasa a la siguiente hoja', true);
   } else {
     ponerPista('Hoja encontrada', true);
   }
+}
+
+/**
+ * Antes de la foto automática se mide la nitidez de la hoja en el video: si
+ * está borrosa se pide enfocar y se espera (hasta 3 veces; después se toma igual
+ * y el recorte avisa).
+ */
+async function capturarSiEstaNitida() {
+  if (midiendo || capturando || !vivas) return;
+  midiendo = true;
+  let borrosa = false;
+  try {
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const xs = vivas.map(p => p.x * vw), ys = vivas.map(p => p.y * vh);
+    const x0 = Math.max(0, Math.min(...xs)), y0 = Math.max(0, Math.min(...ys));
+    const bw = Math.min(vw, Math.max(...xs)) - x0, bh = Math.min(vh, Math.max(...ys)) - y0;
+    const k = Math.min(1, 1000 / Math.max(bw, bh));
+    const c = document.createElement('canvas');
+    c.width = Math.max(8, Math.round(bw * k)); c.height = Math.max(8, Math.round(bh * k));
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(video, x0, y0, bw, bh, 0, 0, c.width, c.height);
+    const img = ctx.getImageData(0, 0, c.width, c.height);
+    soltarCanvas(c);
+    const esquinas = vivas.map(p => ({ x: (p.x * vw - x0) / bw, y: (p.y * vh - y0) / bh }));
+    borrosa = (await conLimite(nitidez(img, esquinas), 2500)).borrosa;
+  } catch (e) {}
+  midiendo = false;
+  if (!activa || !lista || capturando) return;
+  if (borrosa && intentosEnfoque < 3) {
+    intentosEnfoque++;
+    quietaDesde = performance.now() - 600; // se vuelve a medir en un momento
+    ponerPista('Enfocando… no te muevas', true);
+    enfocar();
+    return;
+  }
+  intentosEnfoque = 0;
+  disparar();
+}
+
+/** Pide al teléfono que enfoque (en el punto tocado, si se puede). No todos lo permiten */
+function enfocar(x, y) {
+  const pista = flujo?.getVideoTracks()[0];
+  if (!pista || !enfoques.includes('single-shot')) return;
+  const pedido = { focusMode: 'single-shot' };
+  if (x !== undefined) pedido.pointsOfInterest = [{ x, y }];
+  pista.applyConstraints({ advanced: [pedido] })
+    .catch(() => pista.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] }))
+    .catch(() => {})
+    .finally(() => {
+      // Después de enfocar, vuelve a enfocar solo mientras se mueve
+      if (enfoques.includes('continuous')) setTimeout(() => pista.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {}), 2000);
+    });
 }
 
 function ponerPista(texto, encontrada) {
@@ -246,6 +309,7 @@ async function tomarFoto() {
       motivoFalla = e.message;
     }
   }
+  if (!video.videoWidth) throw new Error('La cámara todavía no está lista');
   return { blob: await canvasABlob(aCanvas(video), 'image/jpeg', 0.95), origen: 'cuadro del video' + (motivoFalla ? ` (la foto completa falló: ${motivoFalla})` : '') };
 }
 
@@ -286,7 +350,7 @@ function marcarTomada() {
 }
 
 async function disparar() {
-  if (capturando || !flujo) return;
+  if (capturando || !flujo || video.readyState < 2 || !video.videoWidth) return;
   capturando = true;
   destello();
   try {
@@ -309,20 +373,37 @@ async function usarFoto(blob, origen = 'cámara del teléfono') {
     foto: `${foto.anchoOriginal} × ${foto.altoOriginal}`,
     origen
   });
-  if (ajustes().rafaga) {
+  if (ajustes().rafaga && !sesion.reemplazar) {
     // Sin parar: la hoja se busca sola y la página se arma en la cola
     const docId = await asegurarDocumento();
     contarPagina(await miniaturaDe(foto.canvas));
-    encolar(docId, () => crearPagina(foto));
+    const n = sesion.cantidad;
+    encolar(docId, async () => {
+      const pagina = await crearPagina(foto);
+      if (esBorrosa(pagina)) aviso(`La foto ${n} salió borrosa: revísala en el documento.`, 'error', 5000);
+      return pagina;
+    });
     ponerPista(`Página ${sesion.cantidad} guardada`, true);
     return;
   }
   const esquinas = await buscarHoja(foto.canvas);
+  let borrosa = false;
+  try { borrosa = await fotoBorrosa(foto.canvas, esquinas || TODA_LA_FOTO); } catch (e) {}
   abrirRecorte({
     fuente: foto.canvas,
     esquinas,
+    borrosa: borrosa && ajustes().filtro !== 'dibujo',
     textoCancelar: 'Repetir foto',
     alListo: async esq => {
+      if (sesion.reemplazar) {
+        // Volver a tomar una página: queda en su mismo lugar
+        const { id, n } = sesion.reemplazar, docId = sesion.docId;
+        await reemplazarPagina(docId, id, await crearPagina(foto, esq));
+        sesion = null;
+        aviso(`Listo: se cambió la página ${n}.`, 'exito');
+        volver(`doc/${encodeURIComponent(docId)}/pagina/${n}`, 2); // recorte → cámara → página
+        return;
+      }
       const docId = await asegurarDocumento();
       const miniatura = await miniaturaDe(foto.canvas); // antes: crearPagina suelta el canvas
       try {
@@ -342,6 +423,7 @@ function terminar() {
   const s = sesion;
   sesion = null;
   if (s?.ultima) URL.revokeObjectURL(s.ultima);
+  if (s?.origen === 'pagina') return volver(`doc/${encodeURIComponent(s.docId)}/pagina/${s.reemplazar?.n || 1}`);
   if (s?.docId && (s.cantidad > 0 || pendientesEnCola(s.docId) > 0)) {
     if (s.origen === 'doc') volver('doc/' + encodeURIComponent(s.docId));
     else ir('doc/' + encodeURIComponent(s.docId), { reemplazar: true });
@@ -378,6 +460,22 @@ function pintarBotones() {
 }
 
 export function iniciar() {
+  // Tocar la imagen de la cámara: enfoca ahí (si el teléfono lo permite)
+  $('.camara').addEventListener('click', e => {
+    if (!flujo || !video.videoWidth || e.target.closest('button')) return;
+    const r = video.getBoundingClientRect();
+    const k = Math.min(r.width / video.videoWidth, r.height / video.videoHeight);
+    const dw = video.videoWidth * k, dh = video.videoHeight * k;
+    const x = (e.clientX - r.left - (r.width - dw) / 2) / dw, y = (e.clientY - r.top - (r.height - dh) / 2) / dh;
+    if (x < 0 || y < 0 || x > 1 || y > 1) return;
+    const anillo = $('#camara-enfoque');
+    anillo.hidden = true;
+    anillo.style.left = `${e.clientX - r.left}px`;
+    anillo.style.top = `${e.clientY - r.top}px`;
+    void anillo.offsetWidth;
+    anillo.hidden = false;
+    enfocar(x, y);
+  });
   $('#camara-disparar').addEventListener('click', () => disparar());
   $('#camara-cerrar').addEventListener('click', terminar);
   $('#camara-listo').addEventListener('click', terminar);

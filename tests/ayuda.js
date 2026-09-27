@@ -4,25 +4,27 @@ import { writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { servir } from './servidor.js';
-import { crearEscena, aPNG, ESCENAS } from './escenas.js';
+import { crearEscena, aPNG, ESCENAS, desenfocar } from './escenas.js';
 import { escribirY4M } from './video-falso.js';
 
 export const carpeta = mkdtempSync(join(tmpdir(), 'scanlibre-'));
 
 /** Guarda una foto de prueba (escena k al doble de tamaño) y devuelve su ruta y las esquinas reales (0..1) */
-export function fotoDePrueba(k = 1, nombre = `foto${k}.png`) {
+export function fotoDePrueba(k = 1, nombre = `foto${k}.png`, { borrosa = false } = {}) {
   const e = ESCENAS[k];
   const esquinas = e.esquinas.map(p => ({ x: p.x * 2, y: p.y * 2 }));
   const ruta = join(carpeta, nombre);
-  writeFileSync(ruta, aPNG(crearEscena({ ...e, ancho: 960, alto: 1280, esquinas, semilla: k + 1 })));
+  const escena = crearEscena({ ...e, ancho: 960, alto: 1280, esquinas, semilla: k + 1 });
+  writeFileSync(ruta, aPNG(borrosa ? desenfocar(escena, 2) : escena));
   return { ruta, esquinas: esquinas.map(p => ({ x: p.x / 960, y: p.y / 1280 })) };
 }
 
-/** Video de cámara falso con la escena k */
-export function videoDePrueba(k = 1) {
+/** Video de cámara falso con la escena k (borrosa: como si la cámara no enfocara) */
+export function videoDePrueba(k = 1, { borrosa = false } = {}) {
   const e = ESCENAS[k], f = 1.5;
-  const ruta = join(carpeta, `camara${k}.y4m`);
-  escribirY4M(ruta, [crearEscena({ ...e, ancho: 720, alto: 960, esquinas: e.esquinas.map(p => ({ x: p.x * f, y: p.y * f })), semilla: k + 1 })]);
+  const ruta = join(carpeta, `camara${k}${borrosa ? '-borrosa' : ''}.y4m`);
+  const escena = crearEscena({ ...e, ancho: 720, alto: 960, esquinas: e.esquinas.map(p => ({ x: p.x * f, y: p.y * f })), semilla: k + 1 });
+  escribirY4M(ruta, [borrosa ? desenfocar(escena, 2) : escena]);
   return ruta;
 }
 

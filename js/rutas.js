@@ -47,9 +47,9 @@ export function ir(ruta, { reemplazar = false } = {}) {
   mostrar();
 }
 
-/** Atrás dentro de la app; si se entró directo a esta pantalla, va a `respaldo` */
-export function volver(respaldo = '') {
-  if (indice > 0) history.back();
+/** Atrás dentro de la app (`pasos` pantallas); si se entró directo a esta pantalla, va a `respaldo` */
+export function volver(respaldo = '', pasos = 1) {
+  if (indice >= pasos) history.go(-pasos);
   else ir(respaldo, { reemplazar: true });
 }
 

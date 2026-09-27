@@ -4,7 +4,7 @@
 import { $, el, icono, aviso, confirmar, pedirTexto, menu, hoja, paginasTexto, fechaCorta, tamanoLegible, nombreArchivo } from '../util.js';
 import { obtenerDocumento, guardarDocumento, paginasDe, borrarDocumento } from '../db.js';
 import { ir, volver } from '../rutas.js';
-import { eventosPaginas, pendientesEnCola, importarArchivos, textoDePagina } from '../paginas.js';
+import { eventosPaginas, pendientesEnCola, importarArchivos, textoDePagina, esBorrosa } from '../paginas.js';
 import { mostrarTexto } from './texto.js';
 import { nuevaSesion } from './camara.js';
 import { elegirArchivos } from '../archivos.js';
@@ -46,8 +46,9 @@ async function pintar() {
     const u = URL.createObjectURL(p.miniatura);
     urls.push(u);
     return el('li', {},
-      el('button', { class: 'miniatura', 'aria-label': `Página ${i + 1}`, onclick: () => ir(ruta('pagina', i + 1)) },
+      el('button', { class: 'miniatura', 'aria-label': `Página ${i + 1}${esBorrosa(p) ? ' (borrosa)' : ''}`, onclick: () => ir(ruta('pagina', i + 1)) },
         el('img', { src: u, alt: '' }),
+        esBorrosa(p) && el('span', { class: 'miniatura-borrosa', text: 'Borrosa' }),
         el('span', { class: 'miniatura-numero', text: String(i + 1) })));
   });
   for (let i = 0; i < pendientes; i++) {

@@ -83,6 +83,7 @@
     <div class="camara">
       <video id="camara-video" playsinline muted autoplay></video>
       <canvas id="camara-marco" aria-hidden="true"></canvas>
+      <div id="camara-enfoque" class="enfoque" aria-hidden="true" hidden></div>
       <div id="camara-destello" class="destello" aria-hidden="true"></div>
       <div id="camara-sin-camara" class="sin-camara" hidden>
         <svg class="icono"><use href="#i-camara"/></svg>
@@ -103,7 +104,7 @@
     <p id="camara-pista" class="camara-pista" aria-live="polite">Apunta a la hoja</p>
     <footer class="camara-abajo">
       <button class="boton-icono boton-icono-grande" id="camara-galeria" aria-label="Elegir fotos de la galería"><svg class="icono"><use href="#i-galeria"/></svg></button>
-      <button class="disparador" id="camara-disparar" aria-label="Tomar foto"><span></span></button>
+      <button class="disparador" id="camara-disparar" aria-label="Tomar foto" disabled><span></span></button>
       <button class="camara-listo" id="camara-listo" aria-label="Terminar" hidden>
         <img id="camara-ultima" alt="">
         <span id="camara-cuenta">0</span>
@@ -122,6 +123,10 @@
     <div class="recorte" id="recorte-area">
       <canvas id="recorte-lienzo" aria-label="Foto con las cuatro esquinas de la hoja. Arrastra cada esquina para ajustarla."></canvas>
       <p id="recorte-error" class="recorte-error" hidden>Las esquinas se cruzan: acomódalas en orden.</p>
+      <div id="recorte-borrosa" class="borrosa-aviso" role="alert" hidden>
+        <p><strong>La foto salió borrosa.</strong> Aleja un poco el teléfono (unos 25 cm), espera a que enfoque y no te muevas al tomarla.</p>
+        <button class="boton boton-primario" id="recorte-repetir"><svg class="icono"><use href="#i-camara"/></svg>Repetir foto</button>
+      </div>
     </div>
     <footer class="acciones acciones-oscuras recorte-acciones">
       <button class="herramienta" id="recorte-todo"><svg class="icono"><use href="#i-expandir"/></svg><span>Toda la foto</span></button>
@@ -156,6 +161,10 @@
       <h1 id="pagina-titulo">Página</h1>
       <button class="boton-icono" id="pagina-borrar" aria-label="Eliminar esta página"><svg class="icono"><use href="#i-basura"/></svg></button>
     </header>
+    <div id="pagina-borrosa" class="borrosa-aviso borrosa-aviso-pagina" role="status" hidden>
+      <p><strong>Esta página salió borrosa.</strong> Si no se lee bien, vuelve a tomarla.</p>
+      <button class="boton boton-secundario" id="pagina-retomar"><svg class="icono"><use href="#i-camara"/></svg>Volver a tomar</button>
+    </div>
     <div class="pagina-visor">
       <button class="boton-icono pagina-flecha" id="pagina-anterior" aria-label="Página anterior"><svg class="icono"><use href="#i-antes"/></svg></button>
       <div class="pagina-hoja">

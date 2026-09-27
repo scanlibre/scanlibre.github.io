@@ -36,17 +36,37 @@ describe('Filtros', () => {
     assert.ok(t.media < 110, `tinta ${t.media.toFixed(0)}`);
   });
 
-  it('"Mejorada" no satura los colores', () => {
-    const w = 100, h = 100, data = new Uint8ClampedArray(w * h * 4);
-    for (let i = 0; i < w * h; i++) {
-      const x = i % w, y = (i / w) | 0;
-      const azul = x > 30 && x < 70 && y > 30 && y < 70;
-      data.set(azul ? [110, 140, 200, 255] : [236, 234, 228, 255], i * 4);
+  it('"Mejorada" conserva los recuadros de color, sin borrarlos ni saturarlos', () => {
+    // Recuadros chicos y grandes, en imágenes de distinto tamaño
+    for (const [w, lado] of [[400, 0.4], [800, 0.15], [800, 0.4], [1200, 0.6]]) {
+      const h = w, data = new Uint8ClampedArray(w * h * 4);
+      for (let i = 0; i < w * h; i++) {
+        const x = i % w, y = (i / w) | 0;
+        const azul = Math.abs(x - w / 2) < w * lado / 2 && Math.abs(y - h / 2) < h * lado / 2;
+        data.set(azul ? [110, 140, 200, 255] : [236, 234, 228, 255], i * 4);
+      }
+      const out = aplicarFiltro({ data, width: w, height: h }, 'mejorada');
+      const i = ((h >> 1) * w + (w >> 1)) * 4;
+      // Saturación = (máx − mín) / máx: el papel se aclara un poco y el color con él, pero no se satura
+      const [r, , b] = out.data.slice(i, i + 3);
+      const antes = (200 - 110) / 200, despues = (b - r) / b;
+      assert.ok(b - r > 60, `${w} px, recuadro de ${lado * 100}%: el azul no se borra (${[...out.data.slice(i, i + 3)]})`);
+      assert.ok(Math.abs(despues - antes) < 0.06, `${w} px, recuadro de ${lado * 100}%: saturación ${antes.toFixed(2)} → ${despues.toFixed(2)}`);
+    }
+  });
+
+  it('"Mejorada" aclara una sombra gris fuerte (el lomo de un libro)', () => {
+    const w = 800, h = 1000, data = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const luz = x < 120 ? 0.45 + 0.55 * x / 120 : 1; // sombra que baja al 45 % en el borde
+      const texto = y % 30 < 5 && x > 30 && x < w - 30 && (x >> 3) % 4 !== 0;
+      const v = (texto ? 40 : 236) * luz;
+      data.set([v, v, v * 0.97, 255], (y * w + x) * 4);
     }
     const out = aplicarFiltro({ data, width: w, height: h }, 'mejorada');
-    const i = (50 * w + 50) * 4;
-    const antes = 200 - 110, despues = out.data[i + 2] - out.data[i];
-    assert.ok(despues <= antes * 1.15, `diferencia de color: antes ${antes}, después ${despues}`);
+    const papel = x => out.data[(15 * w + x) * 4];
+    assert.ok(papel(40) > 215, `papel en la sombra: ${papel(40)}`);
+    assert.ok(papel(400) > 245, `papel fuera de la sombra: ${papel(400)}`);
   });
 
   it('"Mejorada" y "Dibujo" no borran los trazos suaves de lápiz', () => {

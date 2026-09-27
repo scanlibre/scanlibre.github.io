@@ -4,7 +4,8 @@
 import { $, el, aviso, confirmar, nombreArchivo } from '../util.js';
 import { obtenerDocumento, guardarDocumento, obtenerPagina, borrarPagina } from '../db.js';
 import { ir, volver } from '../rutas.js';
-import { reprocesar } from '../paginas.js';
+import { reprocesar, esBorrosa } from '../paginas.js';
+import { nuevaSesion } from './camara.js';
 import { abrirFoto } from '../fotos.js';
 import { FILTROS } from '../imagen/filtros.js';
 import { cambiarAjuste } from '../ajustes.js';
@@ -40,6 +41,7 @@ function pintar() {
   for (const b of $('#pagina-filtros').children) b.setAttribute('aria-pressed', String(b.dataset.filtro === pagina.filtro));
   $('#pagina-anterior').disabled = n <= 1;
   $('#pagina-siguiente').disabled = n >= total;
+  $('#pagina-borrosa').hidden = !esBorrosa(pagina);
   $('#pagina-mover-antes').disabled = n <= 1;
   $('#pagina-mover-despues').disabled = n >= total;
 }
@@ -115,6 +117,10 @@ export function iniciar() {
       cambiar({ filtro: valor });
     } }, texto)));
   $('#pagina-atras').addEventListener('click', () => volver(ruta()));
+  $('#pagina-retomar').addEventListener('click', () => {
+    nuevaSesion(doc.id, 'pagina', { id: pagina.id, n });
+    ir('camara?doc=' + encodeURIComponent(doc.id));
+  });
   $('#pagina-anterior').addEventListener('click', () => ir(ruta('pagina', n - 1), { reemplazar: true }));
   $('#pagina-siguiente').addEventListener('click', () => ir(ruta('pagina', n + 1), { reemplazar: true }));
   $('#pagina-girar-izq').addEventListener('click', () => cambiar({ rotacion: (pagina.rotacion + 3) % 4 }));

@@ -32,7 +32,9 @@ function abrirWorker() {
 async function pedir(mensaje, transferir) {
   if (!(await abrirWorker()) || !worker) {
     directo = directo || await import('./imagen/procesar.js');
-    return mensaje.tipo === 'detectar' ? directo.detectarHoja(mensaje.imagen) : directo.procesarPagina(mensaje.imagen, mensaje.opciones);
+    if (mensaje.tipo === 'detectar') return directo.detectarHoja(mensaje.imagen);
+    if (mensaje.tipo === 'nitidez') return mensaje.opciones?.esquinas ? directo.nitidezDeHoja(mensaje.imagen, mensaje.opciones.esquinas) : directo.medirNitidez(mensaje.imagen);
+    return directo.procesarPagina(mensaje.imagen, mensaje.opciones);
   }
   const id = siguiente++;
   return new Promise((resolver, rechazar) => {
@@ -46,11 +48,22 @@ export function detectar(imagen) {
   return pedir({ tipo: 'detectar', imagen: { data: imagen.data, width: imagen.width, height: imagen.height } });
 }
 
-/** Endereza, filtra y gira. `imagen` (ImageData) se entrega al worker: no se puede volver a usar */
+/**
+ * Endereza, filtra y gira. `imagen` (ImageData) se entrega al worker: no se puede volver a usar.
+ * Devuelve { imagen: ImageData, nitidez } (nitidez null si no se pudo medir).
+ */
 export async function procesar(imagen, opciones) {
   const r = await pedir(
     { tipo: 'procesar', imagen: { data: imagen.data, width: imagen.width, height: imagen.height }, opciones },
     [imagen.data.buffer]
   );
-  return new ImageData(new Uint8ClampedArray(r.data.buffer, r.data.byteOffset, r.data.length), r.width, r.height);
+  return { imagen: new ImageData(new Uint8ClampedArray(r.data.buffer, r.data.byteOffset, r.data.length), r.width, r.height), nitidez: r.nitidez };
+}
+
+/**
+ * Nitidez de una imagen (ImageData). Con `esquinas`, de la hoja enderezada.
+ * Devuelve { valor, borrosa }.
+ */
+export function nitidez(imagen, esquinas) {
+  return pedir({ tipo: 'nitidez', imagen: { data: imagen.data, width: imagen.width, height: imagen.height }, opciones: esquinas ? { esquinas } : null });
 }

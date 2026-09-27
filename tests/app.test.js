@@ -38,6 +38,19 @@ describe('La app', () => {
     assert.match(await page.textContent('#inicio-lista'), /1 página/);
   });
 
+  it('una foto borrosa se marca en el documento y en la página', async () => {
+    const page = await env.pagina();
+    const borrosa = fotoDePrueba(1, 'borrosa.png', { borrosa: true });
+    await importarFoto(page, foto2.ruta, borrosa.ruta);
+    const marcas = await page.$$eval('#doc-paginas .miniatura', bs => bs.map(b => !!b.querySelector('.miniatura-borrosa')));
+    assert.deepEqual(marcas.slice(0, 2), [false, true], 'solo la segunda página está borrosa');
+    await page.click('#doc-paginas li:nth-child(2) .miniatura');
+    await page.waitForSelector('#pagina-borrosa:not([hidden])');
+    await page.click('#pagina-anterior');
+    await page.waitForFunction(() => document.querySelector('#pagina-titulo').textContent === 'Página 1 de 2');
+    assert.equal(await page.isVisible('#pagina-borrosa'), false);
+  });
+
   it('crea el PDF y se descarga con el nombre del documento', async () => {
     const page = await env.pagina();
     await importarFoto(page, foto1.ruta, foto2.ruta);

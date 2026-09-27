@@ -6,8 +6,9 @@ import { detectarHoja } from './deteccion.js';
 import { enderezar, rotar90 } from './perspectiva.js';
 import { aplicarFiltro } from './filtros.js';
 import { tamanoEnderezado } from './geometria.js';
+import { medirNitidez } from './nitidez.js';
 
-export { detectarHoja };
+export { detectarHoja, medirNitidez };
 
 /**
  * @param imagen   foto completa {data, width, height}
@@ -19,5 +20,15 @@ export function procesarPagina(imagen, { esquinas, filtro = 'mejorada', rotacion
   const t = tamanoEnderezado(px, imagen.width, imagen.height);
   const k = Math.min(1, maxLado / Math.max(t.ancho, t.alto));
   const plana = enderezar(imagen, px, Math.max(1, Math.round(t.ancho * k)), Math.max(1, Math.round(t.alto * k)));
-  return rotar90(aplicarFiltro(plana, filtro), rotacion);
+  const r = rotar90(aplicarFiltro(plana, filtro), rotacion);
+  // La nitidez se mide en la hoja enderezada sin filtro: el B/N o un dibujo no la engañan
+  return { data: r.data, width: r.width, height: r.height, nitidez: medirNitidez(plana).valor };
+}
+
+/** Nitidez de la hoja (enderezada a poca resolución): para avisar si la foto salió borrosa */
+export function nitidezDeHoja(imagen, esquinas) {
+  const px = esquinas.map(p => ({ x: p.x * imagen.width, y: p.y * imagen.height }));
+  const t = tamanoEnderezado(px, imagen.width, imagen.height);
+  const k = Math.min(1, 1000 / Math.max(t.ancho, t.alto));
+  return medirNitidez(enderezar(imagen, px, Math.max(8, Math.round(t.ancho * k)), Math.max(8, Math.round(t.alto * k))));
 }

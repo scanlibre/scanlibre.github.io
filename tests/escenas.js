@@ -82,6 +82,26 @@ export function crearEscena({ ancho = 480, alto = 640, esquinas, fondo = 'madera
   return { data: out, width: ancho, height: alto };
 }
 
+/** Desenfoque de caja (3 pasadas ≈ gaussiano): una foto movida o fuera de foco */
+export function desenfocar({ data, width: w, height: h }, radio = 2) {
+  let a = new Float32Array(data), b = new Float32Array(data.length);
+  for (let pasada = 0; pasada < 3; pasada++) {
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) for (let c = 0; c < 3; c++) {
+      let s = 0;
+      for (let d = -radio; d <= radio; d++) s += a[(y * w + Math.min(w - 1, Math.max(0, x + d))) * 4 + c];
+      b[(y * w + x) * 4 + c] = s / (2 * radio + 1);
+    }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) for (let c = 0; c < 3; c++) {
+      let s = 0;
+      for (let d = -radio; d <= radio; d++) s += b[(Math.min(h - 1, Math.max(0, y + d)) * w + x) * 4 + c];
+      a[(y * w + x) * 4 + c] = s / (2 * radio + 1);
+    }
+  }
+  const out = new Uint8ClampedArray(a);
+  for (let i = 3; i < out.length; i += 4) out[i] = 255;
+  return { data: out, width: w, height: h };
+}
+
 /** PNG sin pérdida a partir de RGBA (para fotos de prueba y para revisar resultados) */
 export function aPNG({ data, width, height }) {
   const crc = (() => {

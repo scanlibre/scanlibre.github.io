@@ -23,6 +23,7 @@ let trabajando = false;
  * @param op.esquinas  esquinas iniciales (fracciones 0..1) o null para toda la foto
  * @param op.alListo   async (esquinas) => ...; es quien decide a dónde ir después
  * @param op.alCancelar () => ...
+ * @param op.borrosa   true para avisar que la foto salió borrosa (con un botón para repetirla)
  */
 export function abrirRecorte(op) {
   estado = { ...op, esquinas: (op.esquinas || TODA_LA_FOTO).map(p => ({ ...p })) };
@@ -32,6 +33,7 @@ export function abrirRecorte(op) {
 export function mostrar() {
   if (!estado) return volver(''); // se recargó la página en esta pantalla: no hay foto
   $('#recorte-cancelar').setAttribute('aria-label', estado.textoCancelar || 'Cancelar');
+  $('#recorte-borrosa').hidden = !estado.borrosa;
   trabajando = false;
   $('#recorte-listo').disabled = false;
   dibujar();
@@ -173,6 +175,10 @@ new ResizeObserver(() => { if (estado) dibujar(); }).observe(area);
 
 export function iniciar() {
   $('#recorte-cancelar').addEventListener('click', () => {
+    const cancelar = estado?.alCancelar;
+    if (cancelar) cancelar(); else volver('');
+  });
+  $('#recorte-repetir').addEventListener('click', () => {
     const cancelar = estado?.alCancelar;
     if (cancelar) cancelar(); else volver('');
   });

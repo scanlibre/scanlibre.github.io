@@ -7,10 +7,12 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 ## Qué hace
 
 - **Cámara con la hoja marcada en vivo.** Encuentra la hoja sola, también con sombras, sobre mesas de color o con poco contraste.
-- **Captura automática** cuando la hoja se queda quieta, y **ráfaga** para escanear un cuaderno entero pasando las páginas, sin tocar la pantalla.
+- **Captura automática** cuando la hoja se queda quieta y la imagen está nítida, y **ráfaga** para escanear un cuaderno entero pasando las páginas, sin tocar la pantalla.
+- **Toca para enfocar** en la parte de la hoja que quieras (si el teléfono lo permite).
+- **Aviso de foto borrosa:** ningún filtro arregla una foto movida o desenfocada, así que la app lo dice al momento y ofrece **Repetir foto**. Las páginas borrosas se marcan en el documento y se pueden **volver a tomar** sin perder su lugar.
 - **Enderezado real:** corrige la perspectiva y calcula la proporción verdadera de la hoja aunque la foto se haya tomado en ángulo.
 - **Esquinas a mano** con lupa; se ven sobre papel blanco y sobre fondos oscuros.
-- **Filtros:** Original, Mejorada (papel blanco sin sombras y sin saturar los colores), Dibujo (para lápiz y bocetos: se ven hasta los trazos más suaves), Gris y B/N.
+- **Filtros:** Original, Mejorada (papel blanco sin sombras y sin saturar los colores), Dibujo (para lápiz y bocetos: se ven hasta los trazos más suaves), Gris y B/N (umbral local tipo Sauvola: no se come el texto suave ni deja manchas negras con la sombra del lomo de un libro).
 - **Texto (OCR), gratis y sin internet:** copiar o compartir el texto de una página o de todo el documento, en español, inglés o los dos. Y **PDF con texto buscable**: se ve igual, pero se pueden buscar y copiar las palabras.
 - **Documentos de varias páginas:** reordenar, girar, recortar de nuevo y borrar páginas, todo gratis.
 - **PDF** en tamaño carta, A4 o con la forma de la foto, y en tres calidades. La calidad *Liviana* sirve para subir a plataformas con límite de tamaño. Las páginas en B/N van a 1 bit por píxel: nítidas y livianas (unos 50 KB por página).
@@ -27,7 +29,8 @@ La detección, los filtros, el PDF y el respaldo están escritos para esta app, 
 | Detección | `js/imagen/deteccion.js` | Bordes (Canny) sobre brillo y saturación; los candidatos salen de grupos de bordes, zonas claras u oscuras (Otsu) y rectas largas (Hough, con el sentido del contraste). Cada lado se afina ajustando una recta y se califica por borde real y por contraste entre adentro y afuera. |
 | Proporción | `js/imagen/geometria.js` | Homografía y proporción real de la hoja (método de Zhang y He). |
 | Enderezado | `js/imagen/perspectiva.js` | Transformación de perspectiva con interpolación bilineal. |
-| Filtros | `js/imagen/filtros.js` | Estima el brillo del papel por zonas y divide por él (quita sombras), balance de blancos, y umbral local para B/N. |
+| Filtros | `js/imagen/filtros.js` | Estima el brillo del papel por zonas y divide por él (quita sombras sin blanquear los recuadros de color), balance de blancos, y umbral de Sauvola para B/N. |
+| Nitidez | `js/imagen/nitidez.js` | Mide qué tan filosos son los bordes de las letras (gradiente entre contraste local, en el centro de cada borde). No depende de la luz ni del tamaño de la foto. |
 | Worker | `js/imagen/worker.js` | Las cuentas pesadas corren aparte para que la app no se trabe. |
 | PDF | `js/pdf.js` | Escritor de PDF propio: JPEG tal cual (DCTDecode) y B/N a 1 bit (FlateDecode). Con OCR, cada palabra va invisible (modo 3) en su lugar, en Courier estirada al ancho de la palabra. |
 | OCR | `js/ocr.js` | Tesseract.js 7 (modelos `best_int` de español e inglés). Se carga la primera vez que se usa (unos 6 MB en español) y el service worker lo guarda para usarlo sin conexión. |
@@ -59,7 +62,7 @@ css/app.css         estilos (claro y oscuro)
 js/app.js           arranque
 js/rutas.js         navegación con #hash (el botón atrás del teléfono funciona)
 js/vistas/          inicio, cámara, recorte, documento y página
-js/imagen/          detección, geometría, enderezado y filtros (sin DOM)
+js/imagen/          detección, geometría, enderezado, filtros y nitidez (sin DOM)
 js/paginas.js       de la foto a la página guardada, con cola para las ráfagas
 js/exportar.js      PDF y compartir
 js/respaldo.js      respaldo .zip
@@ -75,6 +78,7 @@ Lo que sigue sale de lo que la gente les pide y les reclama a CamScanner, Genius
 
 **Fase 2** (en curso)
 - ✅ OCR con Tesseract.js 7 (español e inglés): copiar el texto y PDF con texto buscable.
+- ✅ Aviso de foto borrosa, volver a tomar una página y tocar para enfocar.
 - Carpetas por clase y nombre automático («Cálculo – 27 sep»).
 - PDF con contraseña, gratis.
 - Brillo y contraste a mano, guardables como perfil.

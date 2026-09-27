@@ -78,6 +78,25 @@ export async function agregarPagina(docId, pagina) {
   });
 }
 
+/** Pone `nueva` en el lugar de la página `paginaId` (mismo número de página) */
+export async function reemplazarPagina(docId, paginaId, nueva) {
+  const db = await abrir();
+  return new Promise((resolver, rechazar) => {
+    const tx = db.transaction(['documentos', 'paginas'], 'readwrite');
+    const pags = tx.objectStore('paginas'), docs = tx.objectStore('documentos');
+    pags.get(paginaId).onsuccess = e => {
+      const vieja = e.target.result;
+      pags.put({ ...nueva, id: paginaId, docId, creada: vieja?.creada ?? nueva.creada });
+    };
+    docs.get(docId).onsuccess = e => {
+      const doc = e.target.result;
+      if (doc) { doc.modificado = Date.now(); docs.put(doc); }
+    };
+    tx.oncomplete = () => resolver();
+    tx.onerror = () => rechazar(tx.error);
+  });
+}
+
 export async function borrarPagina(docId, paginaId) {
   const db = await abrir();
   return new Promise((resolver, rechazar) => {
