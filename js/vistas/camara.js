@@ -1,0 +1,381 @@
+// ScanLibre · vistas/camara.js
+// Cámara con la hoja marcada en vivo. Modos:
+//  · normal: después de cada foto se revisan las esquinas;
+//  · ráfaga: foto tras foto sin parar (las esquinas se ponen solas);
+//  · auto: la foto se toma sola cuando la hoja se queda quieta. Con ráfaga
+//    sirve para escanear un cuaderno entero pasando las páginas.
+
+import { $, aviso } from '../util.js';
+import { ir, volver } from '../rutas.js';
+import { ajustes, cambiarAjuste } from '../ajustes.js';
+import { detectar } from '../motor.js';
+import { aCanvas, aImageData, canvasABlob, normalizarFoto, soltarCanvas } from '../fotos.js';
+import { buscarHoja, crearPagina, encolar, importarArchivos, nuevoDocumento, pendientesEnCola } from '../paginas.js';
+import { agregarPagina } from '../db.js';
+import { elegirArchivos } from '../archivos.js';
+import { abrirRecorte } from './recorte.js';
+
+const video = $('#camara-video');
+const marco = $('#camara-marco');
+const pista = $('#camara-pista');
+
+let sesion = null;      // { docId, origen: 'inicio' | 'doc', cantidad, ultima (url) }
+let flujo = null, capturador = null, fotoCompletaFalla = false;
+let activa = false, capturando = false, detectando = false, ultimaDeteccion = 0;
+let vivas = null, perdidas = 0, quietaDesde = 0;
+// Captura automática: después de una foto hay que pasar a otra hoja antes de la siguiente
+let lista = true, firmaUltima = null, pausaHasta = 0;
+
+/** Empieza una sesión de fotos nueva (para un documento nuevo o para uno que ya existe) */
+export function nuevaSesion(docId, origen) {
+  if (sesion?.ultima) URL.revokeObjectURL(sesion.ultima);
+  sesion = { docId, origen, cantidad: 0, ultima: null };
+  lista = true; firmaUltima = null; pausaHasta = 0;
+}
+
+export async function mostrar(params) {
+  if (!sesion) nuevaSesion(params.doc || null, params.doc ? 'doc' : 'inicio');
+  activa = true;
+  pintarBotones();
+  await encender();
+}
+
+export function ocultar() {
+  activa = false;
+  apagar();
+}
+
+// ── Cámara ──────────────────────────────────────────────────────────
+function motivo(e) {
+  if (!window.isSecureContext) return 'La cámara solo funciona si la página se abre con https.';
+  if (e?.name === 'NotAllowedError') return 'No hay permiso para usar la cámara. Actívalo en la configuración del navegador, o usa la cámara del teléfono.';
+  if (e?.name === 'NotFoundError' || e?.name === 'OverconstrainedError') return 'No se encontró una cámara en este dispositivo.';
+  if (e?.name === 'NotReadableError') return 'Otra app está usando la cámara. Ciérrala e intenta de nuevo.';
+  return 'Este navegador no deja usar la cámara aquí.';
+}
+
+let intento = 0; // cada encendido o apagado cambia el número: un arranque viejo que termina tarde no hace nada
+
+async function encender() {
+  $('#camara-sin-camara').hidden = true;
+  if (flujo) return;
+  if (!navigator.mediaDevices?.getUserMedia) return sinCamara(motivo());
+  const este = ++intento;
+  const conFotoCompleta = 'ImageCapture' in window;
+  let nuevo;
+  try {
+    nuevo = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: 'environment' },
+        // Si el navegador puede sacar la foto a resolución completa, el video puede ser más liviano
+        width: { ideal: conFotoCompleta ? 1920 : 3840 },
+        height: { ideal: conFotoCompleta ? 1080 : 2160 }
+      }
+    });
+  } catch (e) {
+    if (activa && este === intento) sinCamara(motivo(e));
+    return;
+  }
+  // Se salió de la pantalla (o se apagó) mientras pedía permiso
+  if (!activa || este !== intento) { nuevo.getTracks().forEach(t => t.stop()); return; }
+  flujo = nuevo;
+  video.srcObject = nuevo;
+  try { await video.play(); } catch (e) {}
+  if (flujo !== nuevo) return;
+  const pistaVideo = nuevo.getVideoTracks()[0];
+  capturador = conFotoCompleta ? new ImageCapture(pistaVideo) : null;
+  let capacidades = {};
+  try { capacidades = pistaVideo.getCapabilities?.() || {}; } catch (e) {}
+  if (capacidades.focusMode?.includes('continuous')) {
+    pistaVideo.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+  }
+  const linterna = $('#camara-linterna');
+  linterna.hidden = !capacidades.torch;
+  linterna.setAttribute('aria-pressed', 'false');
+  vivas = null; perdidas = 0;
+  requestAnimationFrame(cuadro);
+}
+
+function apagar() {
+  intento++;
+  if (flujo) flujo.getTracks().forEach(t => t.stop());
+  flujo = null; capturador = null;
+  video.srcObject = null;
+  vivas = null;
+  limpiarMarco();
+}
+
+function sinCamara(texto) {
+  $('#camara-sin-camara-motivo').textContent = texto;
+  $('#camara-sin-camara').hidden = false;
+  pista.hidden = true;
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!activa) return;
+  if (document.hidden) apagar(); else encender();
+});
+
+// ── Detección en vivo ───────────────────────────────────────────────
+const conLimite = (promesa, ms) => Promise.race([promesa, new Promise((_, no) => setTimeout(() => no(new Error('tiempo')), ms))]);
+
+function cuadro(t) {
+  if (!activa || !flujo) return;
+  requestAnimationFrame(cuadro);
+  dibujarMarco();
+  if (detectando || capturando || t - ultimaDeteccion < 130 || video.readyState < 2 || !video.videoWidth) return;
+  detectando = true;
+  ultimaDeteccion = t;
+  const img = aImageData(video, 400);
+  // Con límite de tiempo: si una detección se traba, la cámara no se queda "pegada"
+  conLimite(detectar(img), 2500)
+    .then(r => { if (activa) alDetectar(r, img); })
+    .catch(() => {})
+    .finally(() => { detectando = false; });
+}
+
+/** Huella chiquita de la imagen: sirve para notar que ya se pasó a otra página */
+function firma({ data, width, height }) {
+  const f = new Float32Array(48);
+  for (let y = 0; y < height; y += 4) for (let x = 0; x < width; x += 4) {
+    const i = (y * width + x) * 4;
+    f[Math.floor(y * 8 / height) * 6 + Math.floor(x * 6 / width)] += data[i] + data[i + 1] + data[i + 2];
+  }
+  const total = f.reduce((s, v) => s + v, 0) || 1;
+  return f.map(v => v / total);
+}
+const diferencia = (a, b) => a.reduce((s, v, i) => s + Math.abs(v - b[i]), 0);
+const moverMax = (a, b) => Math.max(...a.map((p, i) => Math.hypot(p.x - b[i].x, p.y - b[i].y)));
+
+function alDetectar(r, img) {
+  const ahora = performance.now();
+  if (!lista && ahora > pausaHasta && (!firmaUltima || diferencia(firma(img), firmaUltima) > 0.12)) lista = true;
+  if (!r || r.confianza < 0.55) {
+    if (++perdidas > 3) { vivas = null; if (ahora > pausaHasta) lista = true; }
+    ponerPista('Apunta a la hoja', false);
+    return;
+  }
+  perdidas = 0;
+  const nuevas = r.esquinas;
+  if (vivas && moverMax(vivas, nuevas) < 0.05) {
+    if (moverMax(vivas, nuevas) > 0.012) quietaDesde = ahora;
+    vivas = vivas.map((p, i) => ({ x: (p.x + nuevas[i].x) / 2, y: (p.y + nuevas[i].y) / 2 }));
+  } else {
+    vivas = nuevas;
+    quietaDesde = ahora;
+  }
+  if (ajustes().autoCaptura && lista) {
+    if (ahora - quietaDesde > 1200) disparar();
+    else ponerPista('No te muevas…', true);
+  } else if (ajustes().autoCaptura) {
+    ponerPista('Pasa a la siguiente hoja', true);
+  } else {
+    ponerPista('Hoja encontrada', true);
+  }
+}
+
+function ponerPista(texto, encontrada) {
+  pista.hidden = false;
+  if (pista.textContent !== texto) pista.textContent = texto;
+  pista.classList.toggle('encontrada', encontrada);
+}
+
+function limpiarMarco() {
+  marco.getContext('2d').clearRect(0, 0, marco.width, marco.height);
+}
+
+function dibujarMarco() {
+  const dpr = window.devicePixelRatio || 1;
+  const cw = marco.clientWidth, ch = marco.clientHeight;
+  if (marco.width !== Math.round(cw * dpr) || marco.height !== Math.round(ch * dpr)) {
+    marco.width = Math.round(cw * dpr); marco.height = Math.round(ch * dpr);
+  }
+  const ctx = marco.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cw, ch);
+  if (!vivas || !video.videoWidth) return;
+  // El video se ve completo (object-fit: contain), centrado en la pantalla
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const k = Math.min(cw / vw, ch / vh);
+  const dx = (cw - vw * k) / 2, dy = (ch - vh * k) / 2;
+  const pts = vivas.map(p => [p.x * vw * k + dx, p.y * vh * k + dy]);
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(45, 212, 191, 0.18)';
+  ctx.fill();
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)'; ctx.lineWidth = 5; ctx.stroke();
+  ctx.strokeStyle = '#2dd4bf'; ctx.lineWidth = 3; ctx.stroke();
+  for (const [x, y] of pts) {
+    ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#0f766e'; ctx.stroke();
+  }
+}
+
+// ── Fotos ───────────────────────────────────────────────────────────
+async function tomarFoto() {
+  if (capturador && !fotoCompletaFalla) {
+    try {
+      return await conLimite(capturador.takePhoto(), 4000);
+    } catch (e) {
+      fotoCompletaFalla = true; // en este teléfono no sirve: se usa el cuadro del video
+    }
+  }
+  return canvasABlob(aCanvas(video), 'image/jpeg', 0.95);
+}
+
+async function asegurarDocumento() {
+  if (!sesion.docId) sesion.docId = (await nuevoDocumento()).id;
+  return sesion.docId;
+}
+
+/** Miniatura de una foto para el botón junto al disparador */
+async function miniaturaDe(fuente) {
+  const chico = aCanvas(fuente, 160);
+  const blob = await canvasABlob(chico, 'image/jpeg', 0.7);
+  soltarCanvas(chico);
+  return URL.createObjectURL(blob);
+}
+
+/** Cuenta una página más y muestra su miniatura */
+function contarPagina(url) {
+  if (sesion.ultima) URL.revokeObjectURL(sesion.ultima);
+  sesion.ultima = url;
+  sesion.cantidad++;
+  pintarBotones();
+}
+
+function destello() {
+  const d = $('#camara-destello');
+  d.classList.remove('activo');
+  void d.offsetWidth;
+  d.classList.add('activo');
+  navigator.vibrate?.(30);
+}
+
+/** Recuerda cómo se veía la hoja fotografiada, para no repetirla en la captura automática */
+function marcarTomada() {
+  lista = false;
+  pausaHasta = performance.now() + 1500;
+  firmaUltima = flujo && video.videoWidth ? firma(aImageData(video, 400)) : null;
+}
+
+async function disparar() {
+  if (capturando || !flujo) return;
+  capturando = true;
+  destello();
+  try {
+    const blob = await tomarFoto();
+    marcarTomada();
+    await usarFoto(blob);
+  } catch (e) {
+    console.error(e);
+    aviso('No se pudo tomar la foto. Intenta de nuevo.', 'error');
+  } finally {
+    capturando = false;
+  }
+}
+
+/** Sigue con una foto (de la cámara en vivo o de la app de cámara del teléfono) */
+async function usarFoto(blob) {
+  const foto = await normalizarFoto(blob);
+  if (ajustes().rafaga) {
+    // Sin parar: la hoja se busca sola y la página se arma en la cola
+    const docId = await asegurarDocumento();
+    contarPagina(await miniaturaDe(foto.canvas));
+    encolar(docId, () => crearPagina(foto));
+    ponerPista(`Página ${sesion.cantidad} guardada`, true);
+    return;
+  }
+  const esquinas = await buscarHoja(foto.canvas);
+  abrirRecorte({
+    fuente: foto.canvas,
+    esquinas,
+    textoCancelar: 'Repetir foto',
+    alListo: async esq => {
+      const docId = await asegurarDocumento();
+      const miniatura = await miniaturaDe(foto.canvas); // antes: crearPagina suelta el canvas
+      try {
+        await agregarPagina(docId, await crearPagina(foto, esq));
+      } catch (e) {
+        URL.revokeObjectURL(miniatura);
+        throw e;
+      }
+      contarPagina(miniatura);
+      volver('camara');
+    },
+    alCancelar: () => volver('camara')
+  });
+}
+
+function terminar() {
+  const s = sesion;
+  sesion = null;
+  if (s?.ultima) URL.revokeObjectURL(s.ultima);
+  if (s?.docId && (s.cantidad > 0 || pendientesEnCola(s.docId) > 0)) {
+    if (s.origen === 'doc') volver('doc/' + encodeURIComponent(s.docId));
+    else ir('doc/' + encodeURIComponent(s.docId), { reemplazar: true });
+  } else {
+    volver(s?.origen === 'doc' ? 'doc/' + encodeURIComponent(s.docId) : '');
+  }
+}
+
+async function desdeGaleria() {
+  const archivos = await elegirArchivos('entrada-fotos');
+  if (!archivos.length) return;
+  const docId = await asegurarDocumento();
+  importarArchivos(docId, archivos);
+  sesion.cantidad += archivos.length;
+  terminar();
+}
+
+async function desdeCamaraDelTelefono() {
+  const [archivo] = await elegirArchivos('entrada-camara');
+  if (!archivo) return;
+  try { await usarFoto(archivo); } catch (e) { aviso('No se pudo usar la foto.', 'error'); }
+}
+
+function pintarBotones() {
+  if (!sesion) return;
+  const a = ajustes();
+  $('#camara-auto').setAttribute('aria-pressed', String(a.autoCaptura));
+  $('#camara-rafaga').setAttribute('aria-pressed', String(a.rafaga));
+  const hay = sesion.cantidad > 0;
+  $('#camara-listo').hidden = !hay;
+  $('#camara-hueco').hidden = hay;
+  $('#camara-cuenta').textContent = sesion.cantidad;
+  if (sesion.ultima) $('#camara-ultima').src = sesion.ultima;
+}
+
+export function iniciar() {
+  $('#camara-disparar').addEventListener('click', () => disparar());
+  $('#camara-cerrar').addEventListener('click', terminar);
+  $('#camara-listo').addEventListener('click', terminar);
+  $('#camara-galeria').addEventListener('click', desdeGaleria);
+  $('#camara-galeria-alt').addEventListener('click', desdeGaleria);
+  $('#camara-nativa').addEventListener('click', desdeCamaraDelTelefono);
+  $('#camara-auto').addEventListener('click', () => {
+    cambiarAjuste('autoCaptura', !ajustes().autoCaptura);
+    if (ajustes().autoCaptura) aviso('La foto se toma sola cuando la hoja se queda quieta.');
+    lista = true;
+    pintarBotones();
+  });
+  $('#camara-rafaga').addEventListener('click', () => {
+    cambiarAjuste('rafaga', !ajustes().rafaga);
+    aviso(ajustes().rafaga ? 'Ráfaga: toma varias fotos seguidas; las esquinas se ponen solas.' : 'Después de cada foto podrás ajustar las esquinas.');
+    pintarBotones();
+  });
+  $('#camara-linterna').addEventListener('click', async e => {
+    const boton = e.currentTarget;
+    const encender = boton.getAttribute('aria-pressed') !== 'true';
+    try {
+      await flujo.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: encender }] });
+      boton.setAttribute('aria-pressed', String(encender));
+    } catch (err) {
+      aviso('No se pudo encender la luz.', 'error');
+    }
+  });
+}

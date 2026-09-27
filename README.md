@@ -1,0 +1,89 @@
+# ScanLibre
+
+**Escáner de documentos gratis para estudiantes.** Sin marca de agua, sin anuncios y sin cuenta. Todo se procesa en el teléfono: las fotos nunca salen de él.
+
+Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora, y sin internet después de abrirla una vez. Se publica en GitHub Pages y, más adelante, en Google Play como TWA (igual que Mi Pisto HN).
+
+## Qué hace (Fase 1)
+
+- **Cámara con la hoja marcada en vivo.** Encuentra la hoja sola, también con sombras, sobre mesas de color o con poco contraste.
+- **Captura automática** cuando la hoja se queda quieta, y **ráfaga** para escanear un cuaderno entero pasando las páginas, sin tocar la pantalla.
+- **Enderezado real:** corrige la perspectiva y calcula la proporción verdadera de la hoja aunque la foto se haya tomado en ángulo.
+- **Esquinas a mano** con lupa; se ven sobre papel blanco y sobre fondos oscuros.
+- **Filtros:** Original, Mejorada (papel blanco sin sombras y sin saturar los colores), Gris y B/N.
+- **Documentos de varias páginas:** reordenar, girar, recortar de nuevo y borrar páginas, todo gratis.
+- **PDF** en tamaño carta, A4 o con la forma de la foto, y en tres calidades. La calidad *Liviana* sirve para subir a plataformas con límite de tamaño. Las páginas en B/N van a 1 bit por píxel: nítidas y livianas (unos 50 KB por página).
+- **Compartir** directo a WhatsApp, Drive o Classroom, o descargar el PDF.
+- **Respaldo gratis:** todos los documentos en un `.zip` para guardar donde quieras y restaurarlos en otro teléfono.
+- **Tema claro u oscuro** según el teléfono. Las páginas escaneadas nunca se invierten.
+
+## Cómo funciona por dentro
+
+No usa librerías: todo está escrito para esta app (unos 150 KB de código).
+
+| Parte | Archivo | Qué hace |
+|---|---|---|
+| Detección | `js/imagen/deteccion.js` | Bordes (Canny) sobre brillo y saturación; los candidatos salen de grupos de bordes, zonas claras u oscuras (Otsu) y rectas largas (Hough, con el sentido del contraste). Cada lado se afina ajustando una recta y se califica por borde real y por contraste entre adentro y afuera. |
+| Proporción | `js/imagen/geometria.js` | Homografía y proporción real de la hoja (método de Zhang y He). |
+| Enderezado | `js/imagen/perspectiva.js` | Transformación de perspectiva con interpolación bilineal. |
+| Filtros | `js/imagen/filtros.js` | Estima el brillo del papel por zonas y divide por él (quita sombras), balance de blancos, y umbral local para B/N. |
+| Worker | `js/imagen/worker.js` | Las cuentas pesadas corren aparte para que la app no se trabe. |
+| PDF | `js/pdf.js` | Escritor de PDF propio: JPEG tal cual (DCTDecode) y B/N a 1 bit (FlateDecode). |
+| Respaldo | `js/respaldo.js` | ZIP propio para el respaldo. |
+| Guardado | `js/db.js` | IndexedDB, solo en el teléfono. |
+
+Probada con 12 fotos reales de documentos (cartas, formularios, cuadernos con renglones, apuntes a mano, recibos): encontró la hoja en las 12.
+
+## Probar en la computadora
+
+```bash
+npx serve .          # o: python3 -m http.server 8080
+# abre http://localhost:3000 (la cámara funciona en localhost o con https)
+```
+
+Pruebas automáticas (lógica en Node y la app completa en Chromium, con una cámara simulada):
+
+```bash
+npm install
+npx playwright install chromium
+npm test
+```
+
+## Estructura
+
+```
+index.html          pantallas y los íconos (sprite SVG)
+css/app.css         estilos (claro y oscuro)
+js/app.js           arranque
+js/rutas.js         navegación con #hash (el botón atrás del teléfono funciona)
+js/vistas/          inicio, cámara, recorte, documento y página
+js/imagen/          detección, geometría, enderezado y filtros (sin DOM)
+js/paginas.js       de la foto a la página guardada, con cola para las ráfagas
+js/exportar.js      PDF y compartir
+js/respaldo.js      respaldo .zip
+sw.js               modo sin conexión (subir VERSION al publicar cambios)
+tests/              pruebas (node:test + Playwright)
+```
+
+## Hoja de ruta
+
+Lo que sigue sale de lo que la gente les pide y les reclama a CamScanner, Genius Scan y compañía.
+
+**Fase 2**
+- OCR con Tesseract.js 7 (español e inglés): copiar el texto y PDF con texto buscable. Viene del lector de facturas de Mi Pisto HN.
+- Carpetas por clase y nombre automático («Cálculo – 27 sep»).
+- PDF con contraseña, gratis.
+- Brillo y contraste a mano, guardables como perfil.
+- Buscar texto dentro de todos los documentos.
+
+**Fase 3**
+- Modo cédula (las dos caras en una hoja), modo pizarra y modo libro.
+- Corrección de páginas curvas (libros abiertos).
+- Respaldo cifrado opcional en la nube (Supabase, como las fotos de Mi Pisto HN).
+- Publicación en Google Play (TWA con PWABuilder).
+
+**Nunca:** anuncios, marca de agua, cuentas obligatorias ni funciones gratis que después se cobran.
+
+## Privacidad
+
+ScanLibre no tiene servidor. Las fotos, los documentos y los PDF se quedan en el navegador del teléfono. No hay cuentas, analítica ni rastreo.
