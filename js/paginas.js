@@ -126,6 +126,8 @@ export function encolar(docId, trabajo) {
 }
 
 export const pendientesEnCola = docId => pendientes.get(docId) || 0;
+/** ¿No queda ninguna foto armándose? (entonces se puede recargar la app sin perder nada) */
+export const colaVacia = () => pendientes.size === 0;
 
 /** Fotos de la galería o de un archivo: cada una se normaliza, se busca la hoja y se guarda */
 export function importarArchivos(docId, archivos) {
