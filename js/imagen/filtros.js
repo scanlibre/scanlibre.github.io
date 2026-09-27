@@ -6,12 +6,14 @@
 export const FILTROS = {
   original: 'Original',
   mejorada: 'Mejorada',
+  dibujo: 'Dibujo',
   gris: 'Gris',
   bn: 'B/N'
 };
 
 export function aplicarFiltro(img, filtro) {
-  if (filtro === 'mejorada') return mejorada(img);
+  if (filtro === 'mejorada') return realzar(img, CURVA);
+  if (filtro === 'dibujo') return realzar(img, CURVA_DIBUJO);
   if (filtro === 'gris') return gris(img);
   if (filtro === 'bn') return blancoYNegro(img);
   return img;
@@ -128,12 +130,22 @@ function gananciasDeBlanco(img, L, w, h, fondo) {
   return [lim(sl / sr), lim(sl / sg), lim(sl / sb)];
 }
 
-// Curva de niveles: el papel (>= BLANCO) pasa a blanco y la tinta se oscurece un poco
-const NEGRO = 18, BLANCO = 228;
+// Curvas de niveles (índice = brillo × 4, ya dividido por el brillo del papel).
+// Mejorada: el papel (>= BLANCO) pasa a blanco y la tinta se oscurece un poco.
+// BLANCO no puede ser muy bajo: los trazos suaves de lápiz se perderían con el papel.
+const NEGRO = 18, BLANCO = 238;
 const CURVA = new Uint8ClampedArray(1024);
 for (let i = 0; i < 1024; i++) {
   const t = Math.min(1, Math.max(0, (i / 4 - NEGRO) / (BLANCO - NEGRO)));
-  CURVA[i] = Math.round(255 * Math.pow(t, 1.35));
+  CURVA[i] = Math.round(255 * Math.pow(t, 1.45));
+}
+// Dibujo: solo lo que es casi papel pasa a blanco, y todo trazo se oscurece
+// bastante, así el lápiz más suave se sigue viendo.
+const PAPEL_DIBUJO = 0.955;
+const CURVA_DIBUJO = new Uint8ClampedArray(1024);
+for (let i = 0; i < 1024; i++) {
+  const t = i / 1020;
+  CURVA_DIBUJO[i] = t >= PAPEL_DIBUJO ? 255 : Math.round(255 * Math.pow(t / PAPEL_DIBUJO, 1.9));
 }
 
 /**
@@ -141,7 +153,7 @@ for (let i = 0; i < 1024; i++) {
  * brillo y a cada canal se le devuelve su diferencia de color original. Si la
  * curva se aplicara canal por canal, los colores quedarían saturados.
  */
-function mejorada(img) {
+function realzar(img, curva) {
   const { data, width: w, height: h } = img;
   const L = luminancia(img);
   const fondo = fondoDelPapel(L, w, h);
@@ -152,7 +164,7 @@ function mejorada(img) {
       const k = 255 / fila[x];
       const r = data[j] * gr * k, g = data[j + 1] * gg * k, b = data[j + 2] * gb * k;
       const l = 0.299 * r + 0.587 * g + 0.114 * b;
-      const nuevo = CURVA[Math.min(1023, l * 4 | 0)];
+      const nuevo = curva[Math.min(1023, l * 4 | 0)];
       // Cerca del blanco el color se apaga para que el papel quede limpio
       const color = nuevo > 245 ? (255 - nuevo) / 10 : 1;
       out[j] = nuevo + (r - l) * color;

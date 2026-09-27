@@ -323,9 +323,15 @@ img { display: block; }
 @keyframes girar { to { transform: rotate(360deg); } }
 .miniatura-pendiente .giro { border-color: var(--borde); border-top-color: var(--marca); }
 
-.filtros { display: flex; gap: 8px; padding: 0 16px 10px; overflow-x: auto; justify-content: center; }
+/* Los 5 filtros llenan el ancho y caben en un teléfono de 360 px; en uno más angosto se deslizan de lado */
+.filtros {
+  display: flex; gap: 4px; width: 100%; max-width: 520px; margin: 0 auto;
+  padding: 0 12px 10px; overflow-x: auto; scrollbar-width: none;
+}
+.filtros::-webkit-scrollbar { display: none; }
 .filtro {
-  min-height: 40px; padding: 0 16px; border-radius: 999px;
+  flex: 1 0 auto;
+  min-height: 40px; padding: 0 5px; border-radius: 999px; font-size: 0.86rem;
   border: 1px solid var(--borde); background: var(--superficie); color: var(--texto);
   font-weight: 600; cursor: pointer; white-space: nowrap;
 }

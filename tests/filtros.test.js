@@ -49,6 +49,25 @@ describe('Filtros', () => {
     assert.ok(despues <= antes * 1.15, `diferencia de color: antes ${antes}, después ${despues}`);
   });
 
+  it('"Mejorada" y "Dibujo" no borran los trazos suaves de lápiz', () => {
+    // Trazos de lápiz con distinta fuerza (fracción del brillo del papel) sobre papel con sombra
+    const w = 400, h = 200, fuerzas = [0.92, 0.88, 0.8, 0.6], data = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const trazo = x % 40 < 6 && x > 20 && x < w - 20;
+      const v = 236 * (0.6 + 0.4 * x / w) * (trazo ? fuerzas[Math.floor(y / 50)] : 1);
+      data.set([v, v * 0.99, v * 0.95, 255], (y * w + x) * 4);
+    }
+    const img = { data, width: w, height: h };
+    const valor = (out, x, y) => out.data[(y * w + x) * 4];
+    for (const filtro of ['mejorada', 'dibujo']) {
+      const out = aplicarFiltro(img, filtro);
+      assert.equal(valor(out, 300, 25), 255, `${filtro}: el papel queda blanco`);
+      fuerzas.forEach((f, k) => assert.ok(valor(out, 282, k * 50 + 25) < 250, `${filtro}: el trazo de ${f} se sigue viendo`));
+    }
+    // "Dibujo" marca más los trazos suaves que "Mejorada"
+    assert.ok(valor(aplicarFiltro(img, 'dibujo'), 282, 25) < valor(aplicarFiltro(img, 'mejorada'), 282, 25));
+  });
+
   it('"B/N" deja solo blanco y negro, y la tinta queda negra', () => {
     const out = aplicarFiltro(hojaConSombra(), 'bn');
     for (let i = 0; i < out.data.length; i += 4) assert.ok(out.data[i] === 0 || out.data[i] === 255);

@@ -2,7 +2,7 @@
 // Guarda la app en el teléfono para que funcione sin internet. Al publicar
 // cambios se sube VERSION: el navegador baja la versión nueva y borra la vieja.
 
-const VERSION = 'scanlibre-v2';
+const VERSION = 'scanlibre-v3';
 const ARCHIVOS = [
   './',
   'index.html',

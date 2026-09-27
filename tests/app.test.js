@@ -63,6 +63,22 @@ describe('La app', () => {
     assert.match(pdf.texto, /\/BitsPerComponent 1 \/Filter \/FlateDecode/);
   });
 
+  it('el filtro Dibujo se puede elegir en la página y se guarda', async () => {
+    const page = await env.pagina();
+    await importarFoto(page, foto1.ruta);
+    await page.click('#doc-paginas .miniatura');
+    const filtros = await page.$$eval('#pagina-filtros .filtro', bs => bs.map(b => b.textContent));
+    assert.deepEqual(filtros, ['Original', 'Mejorada', 'Dibujo', 'Gris', 'B/N']);
+    // En un teléfono angosto el primer botón no queda cortado
+    const caja = await page.locator('#pagina-filtros .filtro').first().boundingBox();
+    assert.ok(caja.x >= 0, `el primer filtro empieza en x=${caja.x}`);
+    await page.click('[data-filtro="dibujo"]');
+    await page.waitForFunction(() => document.querySelector('[data-filtro="dibujo"]').getAttribute('aria-pressed') === 'true', null, { timeout: 30000 });
+    const { paginas } = await leerBase(page);
+    assert.equal(paginas[0].filtro, 'dibujo');
+    assert.equal(paginas[0].tipo, 'image/jpeg');
+  });
+
   it('las páginas nuevas salen con el último filtro que se eligió', async () => {
     const page = await env.pagina();
     await importarFoto(page, foto1.ruta);
