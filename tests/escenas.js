@@ -142,3 +142,29 @@ export const ESCENAS = [
   { nombre: 'cuaderno con renglones', fondo: 'oscuro', contenido: 'cuaderno', esquinas: [{ x: 80, y: 60 }, { x: 420, y: 85 }, { x: 400, y: 600 }, { x: 55, y: 575 }] },
   { nombre: 'con el borde de la mesa', fondo: 'mesaBorde', esquinas: [{ x: 110, y: 190 }, { x: 390, y: 200 }, { x: 430, y: 610 }, { x: 70, y: 600 }] }
 ];
+
+/** Una hoja de texto de frente que llena toda la imagen (como ya enderezada) */
+export function paginaDeTexto(ancho = 800, alto = 1100, semilla = 3) {
+  const m = 2; // un poco más grande que la imagen: no se ve el borde
+  return crearEscena({ ancho, alto, esquinas: [{ x: -m, y: -m }, { x: ancho + m, y: -m }, { x: ancho + m, y: alto + m }, { x: -m, y: alto + m }], sombra: 0.15, semilla });
+}
+
+/**
+ * Dobla la hoja como un libro con la esquina de arriba a la derecha levantada:
+ * los renglones se curvan hacia arriba a la derecha, más cuanto más arriba.
+ * `a` es cuánto sube (px) la esquina.
+ */
+export function curvar({ data, width: w, height: h }, a = 40) {
+  const out = new Uint8ClampedArray(data.length);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const d = a * (x / w) ** 3 * (1 - 0.7 * y / h);
+    const sy = y + d, y0 = Math.floor(sy), f = sy - y0, i = (y * w + x) * 4;
+    for (let c = 0; c < 3; c++) {
+      const v0 = y0 >= 0 && y0 < h ? data[(y0 * w + x) * 4 + c] : 255;
+      const v1 = y0 + 1 >= 0 && y0 + 1 < h ? data[((y0 + 1) * w + x) * 4 + c] : 255;
+      out[i + c] = v0 + (v1 - v0) * f;
+    }
+    out[i + 3] = 255;
+  }
+  return { data: out, width: w, height: h };
+}

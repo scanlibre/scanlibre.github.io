@@ -31,8 +31,8 @@ export async function buscarHoja(fuente) {
 }
 
 /** Endereza y filtra la foto; devuelve los Blob de la página y de su miniatura */
-async function renderizar(fuente, { esquinas, filtro, rotacion }) {
-  const { imagen: res, nitidez } = await procesar(aImageData(fuente), { esquinas, filtro, rotacion, maxLado: 3000 });
+async function renderizar(fuente, { esquinas, filtro, rotacion, aplanar = true }) {
+  const { imagen: res, nitidez, aplanada } = await procesar(aImageData(fuente), { esquinas, filtro, rotacion, aplanar, maxLado: 3000 });
   // El blanco y negro se guarda en PNG: sin pérdida y liviano
   const procesada = await imageDataABlob(res, filtro === 'bn' ? 'image/png' : 'image/jpeg', 0.9);
   const lienzo = document.createElement('canvas');
@@ -42,7 +42,7 @@ async function renderizar(fuente, { esquinas, filtro, rotacion }) {
   soltarCanvas(lienzo);
   const miniatura = await canvasABlob(chico, 'image/jpeg', 0.8);
   soltarCanvas(chico);
-  return { procesada, procAncho: res.width, procAlto: res.height, miniatura, nitidez };
+  return { procesada, procAncho: res.width, procAlto: res.height, miniatura, nitidez, aplanada };
 }
 
 /**
@@ -54,12 +54,12 @@ export async function crearPagina(foto, esquinas) {
   const esq = esquinas || await buscarHoja(foto.canvas) || TODA_LA_FOTO;
   const r = await renderizar(foto.canvas, { esquinas: esq, filtro, rotacion: 0 });
   soltarCanvas(foto.canvas);
-  return { id: nuevoId(), original: foto.blob, ancho: foto.ancho, alto: foto.alto, esquinas: esq, filtro, rotacion: 0, creada: Date.now(), ...r };
+  return { id: nuevoId(), original: foto.blob, ancho: foto.ancho, alto: foto.alto, esquinas: esq, filtro, rotacion: 0, aplanar: true, creada: Date.now(), ...r };
 }
 
-/** Vuelve a armar la página con otras esquinas, filtro o giro, y la guarda */
+/** Vuelve a armar la página con otras esquinas, filtro, giro o aplanado, y la guarda */
 export async function reprocesar(pagina, cambios) {
-  const datos = { esquinas: pagina.esquinas, filtro: pagina.filtro, rotacion: pagina.rotacion, ...cambios };
+  const datos = { esquinas: pagina.esquinas, filtro: pagina.filtro, rotacion: pagina.rotacion, aplanar: pagina.aplanar !== false, ...cambios };
   const bitmap = await abrirFoto(pagina.original);
   const r = await renderizar(bitmap, datos);
   bitmap.close?.();
@@ -74,7 +74,7 @@ export async function reprocesar(pagina, cambios) {
 /** Qué versión de la página es: si cambia (filtro, recorte, giro), el texto leído deja de servir */
 // LECTOR sube cuando cambia cómo se lee (así los textos viejos se vuelven a leer)
 const LECTOR = 3;
-const versionDe = p => `l${LECTOR}|${p.filtro}|${p.rotacion}|${p.procAncho}x${p.procAlto}|${JSON.stringify(p.esquinas)}`;
+const versionDe = p => `l${LECTOR}|${p.filtro}|${p.rotacion}|${p.aplanar !== false}|${p.procAncho}x${p.procAlto}|${JSON.stringify(p.esquinas)}`;
 
 /**
  * Texto de la página con el lector de texto (OCR). Si ya se leyó con ese

@@ -1,7 +1,9 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { crearEntorno, fotoDePrueba, importarFoto, leerBase, descargarPDF, distanciaMax } from './ayuda.js';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { crearEntorno, fotoDePrueba, importarFoto, leerBase, descargarPDF, distanciaMax, carpeta } from './ayuda.js';
+import { paginaDeTexto, curvar, aPNG } from './escenas.js';
 
 describe('La app', () => {
   let env;
@@ -123,6 +125,30 @@ describe('La app', () => {
     assert.deepEqual(documentos[0].paginas, [antes[1], antes[2]]);
     assert.deepEqual(paginas.map(p => p.id).sort(), [antes[1], antes[2]].sort(), 'solo se borró esa página');
     assert.ok(paginas.every(p => p.procesada > 1000 && p.original > 1000), 'las demás conservan sus imágenes');
+  });
+
+  it('una página curva se endereza sola, y se puede deshacer', async () => {
+    const page = await env.pagina();
+    const ruta = join(carpeta, 'curva.png');
+    writeFileSync(ruta, aPNG(curvar(paginaDeTexto(), 45)));
+    await importarFoto(page, foto1.ruta, ruta);
+    // Las páginas en el orden del documento
+    const enOrden = async () => { const { documentos, paginas } = await leerBase(page); return documentos[0].paginas.map(id => paginas.find(p => p.id === id)); };
+    assert.deepEqual((await enOrden()).map(p => p.aplanada), [false, true], 'solo la curva se enderezó');
+    await page.click('#doc-paginas li:nth-child(1) .miniatura');
+    assert.equal(await page.isVisible('#pagina-curva'), false, 'en una hoja plana no dice nada');
+    await page.click('#pagina-siguiente');
+    await page.waitForSelector('#pagina-curva:not([hidden])');
+    assert.equal(await page.textContent('#pagina-curva-texto'), 'Se enderezaron los renglones curvos.');
+    await page.click('#pagina-curva-boton'); // Deshacer
+    await page.waitForFunction(() => document.querySelector('#pagina-curva-texto').textContent === 'Página sin enderezar.', null, { timeout: 30000 });
+    let p2 = (await enOrden())[1];
+    assert.equal(p2.aplanar, false); assert.equal(p2.aplanada, false);
+    await page.click('#pagina-curva-boton'); // Enderezar
+    await page.waitForFunction(() => document.querySelector('#pagina-curva-texto').textContent === 'Se enderezaron los renglones curvos.', null, { timeout: 30000 });
+    p2 = (await enOrden())[1];
+    assert.equal(p2.aplanar, true); assert.equal(p2.aplanada, true);
+    assert.deepEqual(page.errores, []);
   });
 
   it('se puede cambiar el nombre del documento', async () => {

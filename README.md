@@ -12,6 +12,7 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Toca para enfocar** en la parte de la hoja que quieras (si el teléfono lo permite).
 - **Aviso de foto borrosa:** ningún filtro arregla una foto movida o desenfocada, así que la app lo dice al momento y ofrece **Repetir foto**. Las páginas borrosas se marcan en el documento y se pueden **volver a tomar** sin perder su lugar.
 - **Enderezado real:** corrige la perspectiva y calcula la proporción verdadera de la hoja aunque la foto se haya tomado en ángulo.
+- **Páginas curvas de libros:** si la hoja no queda plana (cerca del lomo o con una esquina levantada), sigue los renglones de texto y los endereza. En una hoja plana no toca nada, y en cada página se puede deshacer.
 - **Esquinas a mano** con lupa; se ven sobre papel blanco y sobre fondos oscuros.
 - **Filtros:** Original, Mejorada (papel blanco sin sombras y sin saturar los colores), Dibujo (para lápiz y bocetos: se ven hasta los trazos más suaves), Gris y B/N (umbral local tipo Sauvola: no se come el texto suave ni deja manchas negras con la sombra del lomo de un libro).
 - **Texto (OCR), gratis y sin internet:** copiar o compartir el texto de una página o de todo el documento, en español, inglés o los dos. Y **PDF con texto buscable**: se ve igual, pero se pueden buscar y copiar las palabras. Antes de leer, la página se prepara (papel parejo, más contraste y nitidez): así lee también la letra chica de un libro.
@@ -29,6 +30,7 @@ La detección, los filtros, el PDF y el respaldo están escritos para esta app, 
 | Parte | Archivo | Qué hace |
 |---|---|---|
 | Detección | `js/imagen/deteccion.js` | Bordes (Canny) sobre brillo y saturación; los candidatos salen de grupos de bordes, zonas claras u oscuras (Otsu) y rectas largas (Hough, con el sentido del contraste). Cada lado se afina ajustando una recta y se califica por borde real y por contraste entre adentro y afuera. |
+| Páginas curvas | `js/imagen/aplanar.js` | Busca los renglones en franjas verticales, les ajusta una curva y corre cada columna para dejarlos rectos. |
 | Proporción | `js/imagen/geometria.js` | Homografía y proporción real de la hoja (método de Zhang y He). |
 | Enderezado | `js/imagen/perspectiva.js` | Transformación de perspectiva con interpolación bilineal. |
 | Filtros | `js/imagen/filtros.js` | Estima el brillo del papel por zonas y divide por él (quita sombras sin blanquear los recuadros de color), balance de blancos, y umbral de Sauvola para B/N. |
@@ -89,8 +91,8 @@ Lo que sigue sale de lo que la gente les pide y les reclama a CamScanner, Genius
 - Buscar texto dentro de todos los documentos.
 
 **Fase 3**
+- ✅ Corrección de páginas curvas (libros).
 - Modo cédula (las dos caras en una hoja), modo pizarra y modo libro.
-- Corrección de páginas curvas (libros abiertos).
 - Respaldo cifrado opcional en la nube (Supabase, como las fotos de Mi Pisto HN).
 - Publicación en Google Play (TWA con PWABuilder).
 

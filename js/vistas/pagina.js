@@ -42,6 +42,11 @@ function pintar() {
   $('#pagina-anterior').disabled = n <= 1;
   $('#pagina-siguiente').disabled = n >= total;
   $('#pagina-borrosa').hidden = !esBorrosa(pagina);
+  // Solo se muestra si hubo que enderezarla (o si se deshizo): en una hoja plana no dice nada
+  const sinAplanar = pagina.aplanar === false;
+  $('#pagina-curva').hidden = !pagina.aplanada && !sinAplanar;
+  $('#pagina-curva-texto').textContent = sinAplanar ? 'Página sin enderezar.' : 'Se enderezaron los renglones curvos.';
+  $('#pagina-curva-boton').textContent = sinAplanar ? 'Enderezar' : 'Deshacer';
   $('#pagina-mover-antes').disabled = n <= 1;
   $('#pagina-mover-despues').disabled = n >= total;
 }
@@ -128,6 +133,7 @@ export function iniciar() {
   $('#pagina-recortar').addEventListener('click', recortar);
   $('#pagina-mover-antes').addEventListener('click', () => mover(-1));
   $('#pagina-mover-despues').addEventListener('click', () => mover(1));
+  $('#pagina-curva-boton').addEventListener('click', () => { if (pagina) cambiar({ aplanar: pagina.aplanar === false }); });
   $('#pagina-texto').addEventListener('click', () => { if (pagina) mostrarTexto([pagina], { titulo: `Texto de la página ${n}` }); });
   $('#pagina-guardar').addEventListener('click', guardarImagen);
   $('#pagina-borrar').addEventListener('click', borrar);

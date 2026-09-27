@@ -116,7 +116,8 @@ export async function crearRespaldo() {
         archivos.push({ nombre: original, datos: p.original }, { nombre: procesada, datos: p.procesada });
         return {
           id: p.id, ancho: p.ancho, alto: p.alto, esquinas: p.esquinas, filtro: p.filtro, rotacion: p.rotacion,
-          procAncho: p.procAncho, procAlto: p.procAlto, creada: p.creada, ocr: p.ocr || null, nitidez: p.nitidez ?? null, nitidez: p.nitidez ?? null, original, procesada
+          procAncho: p.procAncho, procAlto: p.procAlto, creada: p.creada, ocr: p.ocr || null, nitidez: p.nitidez ?? null,
+          aplanar: p.aplanar !== false, aplanada: !!p.aplanada, original, procesada
         };
       })
     });
@@ -146,6 +147,7 @@ export async function restaurarRespaldo(archivo) {
       paginas.push({
         id: p.id, ancho: p.ancho, alto: p.alto, esquinas: p.esquinas, filtro: p.filtro, rotacion: p.rotacion || 0,
         procAncho: p.procAncho, procAlto: p.procAlto, creada: p.creada, ocr: p.ocr || null, nitidez: p.nitidez ?? null,
+        aplanar: p.aplanar !== false, aplanada: !!p.aplanada,
         original: conTipo(original, p.original), procesada: conTipo(procesada, p.procesada), miniatura
       });
     }

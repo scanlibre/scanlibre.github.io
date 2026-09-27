@@ -283,6 +283,13 @@ img { display: block; }
   .borrosa-aviso-pagina { background: #3b2a06; color: #fde68a; }
   .borrosa-aviso-pagina strong { color: #fff7d6; }
 }
+/* La página tenía renglones curvos y se enderezaron (o se deshizo) */
+.curva-aviso {
+  display: flex; align-items: center; gap: 8px; margin: 0 16px 6px; padding: 2px 4px 2px 12px;
+  border-radius: 12px; background: var(--superficie-2); color: var(--texto-2);
+}
+.curva-aviso p { flex: 1; margin: 0; font-size: 0.88rem; }
+.curva-aviso .boton { min-height: 38px; font-size: 0.9rem; color: var(--marca-fuerte); }
 .miniatura-borrosa {
   position: absolute; right: 8px; top: 8px;
   padding: 3px 8px; border-radius: 999px;

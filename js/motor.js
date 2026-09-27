@@ -51,14 +51,15 @@ export function detectar(imagen) {
 
 /**
  * Endereza, filtra y gira. `imagen` (ImageData) se entrega al worker: no se puede volver a usar.
- * Devuelve { imagen: ImageData, nitidez } (nitidez null si no se pudo medir).
+ * Devuelve { imagen: ImageData, nitidez, aplanada } (nitidez null si no se pudo medir;
+ * aplanada: si se enderezaron renglones curvos).
  */
 export async function procesar(imagen, opciones) {
   const r = await pedir(
     { tipo: 'procesar', imagen: { data: imagen.data, width: imagen.width, height: imagen.height }, opciones },
     [imagen.data.buffer]
   );
-  return { imagen: new ImageData(new Uint8ClampedArray(r.data.buffer, r.data.byteOffset, r.data.length), r.width, r.height), nitidez: r.nitidez };
+  return { imagen: new ImageData(new Uint8ClampedArray(r.data.buffer, r.data.byteOffset, r.data.length), r.width, r.height), nitidez: r.nitidez, aplanada: r.aplanada };
 }
 
 /**
