@@ -60,12 +60,14 @@ export async function imageDataABlob(imagen, tipo, calidad) {
 
 /**
  * Foto lista para guardar: orientada, sin pasar de `maxLado` y en JPEG.
- * Devuelve { blob, ancho, alto, canvas } (el canvas sirve para seguir trabajando sin volver a abrirla).
+ * Devuelve { blob, ancho, alto, canvas, anchoOriginal, altoOriginal }
+ * (el canvas sirve para seguir trabajando sin volver a abrirla).
  */
 export async function normalizarFoto(archivo, maxLado = 2800) {
   const bitmap = await abrirFoto(archivo);
+  const anchoOriginal = anchoDe(bitmap), altoOriginal = altoDe(bitmap);
   const c = aCanvas(bitmap, maxLado);
   bitmap.close?.();
   const blob = await canvasABlob(c, 'image/jpeg', 0.92);
-  return { blob, ancho: c.width, alto: c.height, canvas: c };
+  return { blob, ancho: c.width, alto: c.height, canvas: c, anchoOriginal, altoOriginal };
 }

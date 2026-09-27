@@ -26,6 +26,22 @@ describe('La cámara', () => {
     assert.deepEqual(page.errores, []);
   });
 
+  it('"Acerca de" muestra con qué resolución salió la última foto', async () => {
+    const page = await env.pagina();
+    await page.click('#inicio-escanear');
+    await esperarHoja(page);
+    await page.click('#camara-rafaga');
+    await page.click('#camara-disparar');
+    await page.waitForFunction(() => document.querySelector('#camara-cuenta').textContent === '1', null, { timeout: 20000 });
+    await page.click('#camara-listo');
+    await page.click('#doc-atras');
+    await page.click('#inicio-menu');
+    await page.click('.menu-opcion:nth-child(3)');
+    const texto = await page.textContent('.diagnostico');
+    assert.match(texto, /última foto: \d+ × \d+ \((foto completa|cuadro del video)/);
+    assert.match(texto, /video: 720 × 960/);
+  });
+
   it('en ráfaga toma varias fotos seguidas sin parar', async () => {
     const page = await env.pagina();
     await page.click('#inicio-escanear');

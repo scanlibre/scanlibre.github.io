@@ -4,7 +4,7 @@
 import { $, el, fechaCorta, paginasTexto, aviso, menu, hoja, tamanoLegible } from '../util.js';
 import { listarDocumentos, obtenerPagina } from '../db.js';
 import { ir } from '../rutas.js';
-import { nuevaSesion } from './camara.js';
+import { nuevaSesion, diagnosticoCamara } from './camara.js';
 import { nuevoDocumento, importarArchivos } from '../paginas.js';
 import { elegirArchivos } from '../archivos.js';
 import { crearRespaldo, restaurarRespaldo } from '../respaldo.js';
@@ -77,6 +77,7 @@ async function restaurar() {
 }
 
 function acercaDe() {
+  const cam = diagnosticoCamara();
   return hoja(cerrar => [
     el('h2', { class: 'hoja-titulo', text: 'ScanLibre' }),
     el('div', { class: 'acerca' },
@@ -85,7 +86,8 @@ function acercaDe() {
         el('li', { text: 'Tus fotos se procesan aquí, en tu teléfono: nada se sube a internet.' }),
         el('li', { text: 'Tus documentos se guardan solo en este navegador. Haz un respaldo de vez en cuando.' }),
         el('li', { text: 'Funciona sin conexión después de abrirla una vez.' })),
-      el('p', { text: 'El código está en github.com/scanlibre/scanlibre.github.io' })),
+      el('p', { text: 'El código está en github.com/scanlibre/scanlibre.github.io' }),
+      cam && el('p', { class: 'diagnostico', text: `Cámara · última foto: ${cam.foto} (${cam.origen}) · video: ${cam.video}` })),
     el('div', { class: 'hoja-botones' }, el('button', { class: 'boton boton-primario', onclick: () => cerrar() }, 'Cerrar'))
   ]);
 }

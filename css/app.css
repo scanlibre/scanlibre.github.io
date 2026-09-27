@@ -404,6 +404,7 @@ img { display: block; }
 
 .acerca p { color: var(--texto-2); margin: 8px 0; }
 .acerca ul { margin: 8px 0; padding-left: 20px; color: var(--texto-2); }
+.acerca .diagnostico { font-size: 0.8rem; }
 
 /* ── Avisos ─────────────────────────────────────────────────────── */
 .avisos {

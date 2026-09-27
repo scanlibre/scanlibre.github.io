@@ -20,13 +20,22 @@ const marco = $('#camara-marco');
 const pista = $('#camara-pista');
 
 let sesion = null;      // { docId, origen: 'inicio' | 'doc', cantidad, ultima (url) }
-let flujo = null, capturador = null, fotoCompletaFalla = false;
+let flujo = null, capturador = null, fotoCompletaFalla = false, motivoFalla = '';
 let activa = false, capturando = false, detectando = false, ultimaDeteccion = 0;
 let vivas = null, perdidas = 0, quietaDesde = 0;
 // Captura automática: después de una foto hay que pasar a otra hoja antes de la siguiente
 let lista = true, firmaUltima = null, pausaHasta = 0;
 
 /** Empieza una sesión de fotos nueva (para un documento nuevo o para uno que ya existe) */
+/** Datos de la última foto, para "Acerca de ScanLibre" (ayuda a saber qué tan nítida sale en cada teléfono) */
+function guardarDiagnostico(datos) {
+  try { localStorage.setItem('scanlibre_camara', JSON.stringify({ ...datos, fecha: Date.now() })); } catch (e) {}
+}
+
+export function diagnosticoCamara() {
+  try { return JSON.parse(localStorage.getItem('scanlibre_camara')); } catch (e) { return null; }
+}
+
 export function nuevaSesion(docId, origen) {
   if (sesion?.ultima) URL.revokeObjectURL(sesion.ultima);
   sesion = { docId, origen, cantidad: 0, ultima: null };
@@ -68,9 +77,9 @@ async function encender() {
       audio: false,
       video: {
         facingMode: { ideal: 'environment' },
-        // Si el navegador puede sacar la foto a resolución completa, el video puede ser más liviano
-        width: { ideal: conFotoCompleta ? 1920 : 3840 },
-        height: { ideal: conFotoCompleta ? 1080 : 2160 }
+        // Video en 4K si la cámara lo permite: si la foto completa falla, el cuadro del video sale nítido
+        width: { ideal: 3840 },
+        height: { ideal: 2160 }
       }
     });
   } catch (e) {
@@ -216,15 +225,28 @@ function dibujarMarco() {
 }
 
 // ── Fotos ───────────────────────────────────────────────────────────
+/**
+ * La foto a la resolución máxima del sensor (si el navegador lo permite) o,
+ * si no, el cuadro actual del video. Devuelve { blob, origen }.
+ */
 async function tomarFoto() {
   if (capturador && !fotoCompletaFalla) {
     try {
-      return await conLimite(capturador.takePhoto(), 4000);
+      const pedido = {};
+      try {
+        const cap = await capturador.getPhotoCapabilities();
+        // Sin pedirla, algunos teléfonos (p. ej. Samsung) entregan la foto al tamaño del video
+        if (cap.imageWidth?.max && cap.imageHeight?.max) { pedido.imageWidth = cap.imageWidth.max; pedido.imageHeight = cap.imageHeight.max; }
+        // Sin flash: en papel deja un reflejo blanco (la luz de la linterna sí se respeta)
+        if (cap.fillLightMode?.includes('off') && $('#camara-linterna').getAttribute('aria-pressed') !== 'true') pedido.fillLightMode = 'off';
+      } catch (e) {}
+      return { blob: await conLimite(capturador.takePhoto(pedido), 8000), origen: 'foto completa' };
     } catch (e) {
       fotoCompletaFalla = true; // en este teléfono no sirve: se usa el cuadro del video
+      motivoFalla = e.message;
     }
   }
-  return canvasABlob(aCanvas(video), 'image/jpeg', 0.95);
+  return { blob: await canvasABlob(aCanvas(video), 'image/jpeg', 0.95), origen: 'cuadro del video' + (motivoFalla ? ` (la foto completa falló: ${motivoFalla})` : '') };
 }
 
 async function asegurarDocumento() {
@@ -268,9 +290,9 @@ async function disparar() {
   capturando = true;
   destello();
   try {
-    const blob = await tomarFoto();
+    const { blob, origen } = await tomarFoto();
     marcarTomada();
-    await usarFoto(blob);
+    await usarFoto(blob, origen);
   } catch (e) {
     console.error(e);
     aviso('No se pudo tomar la foto. Intenta de nuevo.', 'error');
@@ -280,8 +302,13 @@ async function disparar() {
 }
 
 /** Sigue con una foto (de la cámara en vivo o de la app de cámara del teléfono) */
-async function usarFoto(blob) {
+async function usarFoto(blob, origen = 'cámara del teléfono') {
   const foto = await normalizarFoto(blob);
+  guardarDiagnostico({
+    video: video.videoWidth ? `${video.videoWidth} × ${video.videoHeight}` : 'sin video',
+    foto: `${foto.anchoOriginal} × ${foto.altoOriginal}`,
+    origen
+  });
   if (ajustes().rafaga) {
     // Sin parar: la hoja se busca sola y la página se arma en la cola
     const docId = await asegurarDocumento();
