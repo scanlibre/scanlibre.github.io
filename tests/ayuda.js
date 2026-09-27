@@ -19,13 +19,33 @@ export function fotoDePrueba(k = 1, nombre = `foto${k}.png`, { borrosa = false }
   return { ruta, esquinas: esquinas.map(p => ({ x: p.x / 960, y: p.y / 1280 })) };
 }
 
-/** Video de cámara falso con la escena k (borrosa: como si la cámara no enfocara) */
-export function videoDePrueba(k = 1, { borrosa = false } = {}) {
-  const e = ESCENAS[k], f = 1.5;
-  const ruta = join(carpeta, `camara${k}${borrosa ? '-borrosa' : ''}.y4m`);
-  const escena = crearEscena({ ...e, ancho: 720, alto: 960, esquinas: e.esquinas.map(p => ({ x: p.x * f, y: p.y * f })), semilla: k + 1 });
-  escribirY4M(ruta, [borrosa ? desenfocar(escena, 2) : escena]);
+/**
+ * Video de cámara falso con la escena k.
+ * @param borrosa  como si la cámara no enfocara
+ * @param temblor  píxeles que se mueve la imagen, como en una mano que tiembla (3 s que se repiten)
+ */
+export function videoDePrueba(k = 1, { borrosa = false, temblor = 0 } = {}) {
+  const e = ESCENAS[k], f = 1.5, W = 720, H = 960;
+  const ruta = join(carpeta, `camara${k}${borrosa ? '-borrosa' : ''}${temblor ? '-temblor' + temblor : ''}.y4m`);
+  const m = Math.ceil(2 * temblor); // margen para mover la ventana
+  let escena = crearEscena({ ...e, ancho: W + 2 * m, alto: H + 2 * m, esquinas: e.esquinas.map(p => ({ x: p.x * f + m, y: p.y * f + m })), semilla: k + 1 });
+  if (borrosa) escena = desenfocar(escena, 2);
+  escribirY4M(ruta, temblor ? cuadrosConTemblor(escena, W, H, m, temblor) : [escena]);
   return ruta;
+}
+
+/** 45 cuadros (3 s a 15 por segundo) de una ventana que tiembla a 4 y 6⅓ vueltas por segundo */
+function cuadrosConTemblor(escena, W, H, m, a) {
+  const cuadros = [];
+  for (let n = 0; n < 45; n++) {
+    const t = n / 15;
+    const ox = Math.round(m + a * (Math.sin(2 * Math.PI * 4 * t) + 0.6 * Math.sin(2 * Math.PI * 19 / 3 * t + 1)) / 1.6);
+    const oy = Math.round(m + a * (Math.cos(2 * Math.PI * 4 * t + 2) + 0.6 * Math.sin(2 * Math.PI * 19 / 3 * t)) / 1.6);
+    const data = new Uint8ClampedArray(W * H * 4);
+    for (let y = 0; y < H; y++) data.set(escena.data.subarray(((y + oy) * escena.width + ox) * 4, ((y + oy) * escena.width + ox + W) * 4), y * W * 4);
+    cuadros.push({ data, width: W, height: H });
+  }
+  return cuadros;
 }
 
 export async function crearEntorno({ video } = {}) {

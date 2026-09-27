@@ -4,6 +4,7 @@
 //  · ráfaga: foto tras foto sin parar (las esquinas se ponen solas);
 //  · auto: la foto se toma sola cuando la hoja se queda quieta. Con ráfaga
 //    sirve para escanear un cuaderno entero pasando las páginas.
+// La foto se toma con el teléfono quieto (giroscopio y video): así no sale movida.
 
 import { $, aviso } from '../util.js';
 import { ir, volver } from '../rutas.js';
@@ -14,7 +15,9 @@ import { buscarHoja, crearPagina, encolar, importarArchivos, nuevoDocumento, pen
 import { agregarPagina, reemplazarPagina } from '../db.js';
 import { elegirArchivos } from '../archivos.js';
 import { abrirRecorte } from './recorte.js';
+import { miniGris, diferenciaMedia, MOV_QUIETO } from '../imagen/movimiento.js';
 
+const vista = $('#vista-camara');
 const video = $('#camara-video');
 const marco = $('#camara-marco');
 const pista = $('#camara-pista');
@@ -23,7 +26,10 @@ let sesion = null;      // { docId, origen: 'inicio' | 'doc', cantidad, ultima (
 let flujo = null, capturador = null, fotoCompletaFalla = false, motivoFalla = '';
 let enfoques = [], midiendo = false, intentosEnfoque = 0;
 let activa = false, capturando = false, detectando = false, ultimaDeteccion = 0;
-let vivas = null, perdidas = 0, quietaDesde = 0;
+let vivas = null, perdidas = 0, hojaDesde = 0, quietoDesde = 0, reintentos = 0;
+// Quietud: giro del teléfono (grados por segundo) y movimiento de la imagen entre cuadros
+const GIRO_QUIETO = 5, UMBRAL_VIDEO = 0.22;
+let giroPico = 0, giro = 0, hayGiro = false, movImagen = Infinity, miniAnterior = null, tMini = 0;
 // Captura automática: después de una foto hay que pasar a otra hoja antes de la siguiente
 let lista = true, firmaUltima = null, pausaHasta = 0;
 
@@ -73,6 +79,7 @@ let intento = 0; // cada encendido o apagado cambia el número: un arranque viej
 async function encender() {
   $('#camara-sin-camara').hidden = true;
   if (flujo) return;
+  pista.hidden = true; // hasta que haya imagen: no queda el texto de la vez anterior
   if (!navigator.mediaDevices?.getUserMedia) return sinCamara(motivo());
   const este = ++intento;
   const conFotoCompleta = 'ImageCapture' in window;
@@ -101,6 +108,7 @@ async function encender() {
   if (!video.videoWidth) await new Promise(r => video.addEventListener('loadeddata', r, { once: true }));
   if (flujo !== nuevo) return;
   $('#camara-disparar').disabled = false;
+  ponerPista('Apunta a la hoja', false);
   const pistaVideo = nuevo.getVideoTracks()[0];
   capturador = conFotoCompleta ? new ImageCapture(pistaVideo) : null;
   let capacidades = {};
@@ -112,12 +120,14 @@ async function encender() {
   const linterna = $('#camara-linterna');
   linterna.hidden = !capacidades.torch;
   linterna.setAttribute('aria-pressed', 'false');
-  vivas = null; perdidas = 0;
+  vivas = null; perdidas = 0; hojaDesde = 0; quietoDesde = 0; miniAnterior = null;
+  window.addEventListener('devicemotion', alGirar);
   requestAnimationFrame(cuadro);
 }
 
 function apagar() {
   intento++;
+  window.removeEventListener('devicemotion', alGirar);
   $('#camara-disparar').disabled = true;
   if (flujo) flujo.getTracks().forEach(t => t.stop());
   flujo = null; capturador = null;
@@ -148,6 +158,7 @@ function cuadro(t) {
   detectando = true;
   ultimaDeteccion = t;
   const img = aImageData(video, 400);
+  medirMovimiento(img);
   // Con límite de tiempo: si una detección se traba, la cámara no se queda "pegada"
   conLimite(detectar(img), 2500)
     .then(r => { if (activa) alDetectar(r, img); })
@@ -167,38 +178,82 @@ function firma({ data, width, height }) {
 }
 const diferencia = (a, b) => a.reduce((s, v, i) => s + Math.abs(v - b[i]), 0);
 const moverMax = (a, b) => Math.max(...a.map((p, i) => Math.hypot(p.x - b[i].x, p.y - b[i].y)));
+const pausa = ms => new Promise(r => setTimeout(r, ms));
+
+// ── Quietud ─────────────────────────────────────────────────────────
+// Una foto sale movida si el teléfono se mueve mientras se toma (con poca luz
+// la cámara tarda más en tomarla). Se mira el giroscopio, si hay, y cuánto
+// cambia la imagen entre cuadros (eso también nota si se mueve la hoja).
+
+function alGirar(e) {
+  const r = e.rotationRate;
+  if (!r || r.alpha === null || r.alpha === undefined) return;
+  hayGiro = true;
+  giroPico = Math.max(giroPico, Math.hypot(r.alpha, r.beta || 0, r.gamma || 0));
+}
+
+/** Movimiento desde la medida anterior (la imagen, normalizada a cada 130 ms, y el giro más fuerte) */
+function medirMovimiento(img) {
+  const ahora = performance.now(), mini = miniGris(img);
+  movImagen = miniAnterior && ahora - tMini < 1000
+    ? diferenciaMedia(mini, miniAnterior) * 130 / Math.max(60, ahora - tMini)
+    : Infinity;
+  miniAnterior = mini; tMini = ahora;
+  giro = giroPico; giroPico = 0;
+}
+
+/** `tolerancia` > 1 afloja la exigencia (para que la captura automática no se trabe nunca) */
+const estaQuieto = (tolerancia = 1) => movImagen < MOV_QUIETO * tolerancia && (!hayGiro || giro < GIRO_QUIETO * tolerancia);
+
+/** Al tocar el botón el teléfono se mueve: se espera a que se asiente (hasta 1,5 s) */
+async function esperarQuietud(max = 1500) {
+  const inicio = performance.now();
+  let desde = 0;
+  await pausa(150);
+  while (activa && flujo && video.videoWidth && performance.now() - inicio < max) {
+    medirMovimiento(aImageData(video, 400));
+    const ahora = performance.now();
+    if (!estaQuieto(1 + (ahora - inicio) / max)) desde = 0;
+    else if (!desde) desde = ahora;
+    else if (ahora - desde >= 200) return;
+    await pausa(70);
+  }
+}
 
 function alDetectar(r, img) {
   const ahora = performance.now();
-  if (!lista && ahora > pausaHasta && (!firmaUltima || diferencia(firma(img), firmaUltima) > 0.12)) lista = true;
+  if (!lista && ahora > pausaHasta && (!firmaUltima || diferencia(firma(img), firmaUltima) > 0.12)) { lista = true; reintentos = 0; }
   if (!r || r.confianza < 0.55) {
-    if (++perdidas > 3) { vivas = null; if (ahora > pausaHasta) lista = true; }
+    if (++perdidas > 3) {
+      vivas = null; hojaDesde = 0; quietoDesde = 0;
+      if (ahora > pausaHasta) { lista = true; reintentos = 0; }
+    }
     ponerPista('Apunta a la hoja', false);
     return;
   }
   perdidas = 0;
+  // Las esquinas se suavizan para dibujarlas; la foto espera a que el teléfono
+  // esté quieto, no a que las esquinas dejen de temblar (en la mano siempre tiemblan)
   const nuevas = r.esquinas;
-  if (vivas && moverMax(vivas, nuevas) < 0.05) {
-    if (moverMax(vivas, nuevas) > 0.012) quietaDesde = ahora;
-    vivas = vivas.map((p, i) => ({ x: (p.x + nuevas[i].x) / 2, y: (p.y + nuevas[i].y) / 2 }));
-  } else {
-    vivas = nuevas;
-    quietaDesde = ahora;
-  }
-  if (ajustes().autoCaptura && lista) {
-    if (ahora - quietaDesde > 1200) capturarSiEstaNitida();
-    else ponerPista('No te muevas…', true);
-  } else if (ajustes().autoCaptura) {
-    ponerPista('Pasa a la siguiente hoja', true);
-  } else {
-    ponerPista('Hoja encontrada', true);
-  }
+  if (vivas && moverMax(vivas, nuevas) < 0.05) vivas = vivas.map((p, i) => ({ x: (p.x + nuevas[i].x) / 2, y: (p.y + nuevas[i].y) / 2 }));
+  else vivas = nuevas;
+  if (!hojaDesde) hojaDesde = ahora;
+  if (!ajustes().autoCaptura) return ponerPista('Hoja encontrada', true);
+  if (!lista) return ponerPista('Pasa a la siguiente hoja', true);
+  // Mientras más se espera, más tolerante: después de unos segundos se toma
+  // en el momento más quieto que se pueda, en vez de esperar para siempre
+  const espera = ahora - hojaDesde;
+  const tolerancia = Math.min(2.5, 1 + Math.max(0, espera - 1200) / 2000);
+  if (!estaQuieto(tolerancia)) quietoDesde = 0;
+  else if (!quietoDesde) quietoDesde = ahora;
+  if (espera > 800 && quietoDesde && ahora - quietoDesde > 600) capturarSiEstaNitida();
+  else if (!midiendo) ponerPista('No te muevas…', true);
 }
 
 /**
  * Antes de la foto automática se mide la nitidez de la hoja en el video: si
- * está borrosa se pide enfocar y se espera (hasta 3 veces; después se toma igual
- * y el recorte avisa).
+ * está desenfocada se pide enfocar y se espera (hasta 2 veces; después se toma
+ * igual y, si la foto sale borrosa, se repite sola).
  */
 async function capturarSiEstaNitida() {
   if (midiendo || capturando || !vivas) return;
@@ -217,19 +272,21 @@ async function capturarSiEstaNitida() {
     const img = ctx.getImageData(0, 0, c.width, c.height);
     soltarCanvas(c);
     const esquinas = vivas.map(p => ({ x: (p.x * vw - x0) / bw, y: (p.y * vh - y0) / bh }));
-    borrosa = (await conLimite(nitidez(img, esquinas), 2500)).borrosa;
+    // El video sale más suave que la foto: aquí solo se busca un desenfoque claro
+    const { valor } = await conLimite(nitidez(img, esquinas), 2500);
+    borrosa = typeof valor === 'number' && valor < UMBRAL_VIDEO;
   } catch (e) {}
   midiendo = false;
   if (!activa || !lista || capturando) return;
-  if (borrosa && intentosEnfoque < 3) {
+  if (borrosa && intentosEnfoque < 2) {
     intentosEnfoque++;
-    quietaDesde = performance.now() - 600; // se vuelve a medir en un momento
+    quietoDesde = performance.now() + 400; // se vuelve a medir cuando termine de enfocar
     ponerPista('Enfocando… no te muevas', true);
     enfocar();
     return;
   }
   intentosEnfoque = 0;
-  disparar();
+  disparar(true);
 }
 
 /** Pide al teléfono que enfoque (en el punto tocado, si se puede). No todos lo permiten */
@@ -349,50 +406,78 @@ function marcarTomada() {
   firmaUltima = flujo && video.videoWidth ? firma(aImageData(video, 400)) : null;
 }
 
-async function disparar() {
+/** @param auto la tomó la captura automática (el teléfono ya estaba quieto) */
+async function disparar(auto = false) {
   if (capturando || !flujo || video.readyState < 2 || !video.videoWidth) return;
   capturando = true;
-  destello();
+  vista.classList.add('tomando');
   try {
+    if (!auto) { ponerPista('Quieto…', true); await esperarQuietud(); }
+    if (!activa || !flujo) return;
+    // Algunos teléfonos tardan en tomar la foto completa: el aviso sigue hasta que llega
+    ponerPista('Tomando la foto… no te muevas', true);
+    const inicio = performance.now();
     const { blob, origen } = await tomarFoto();
+    const ms = Math.round(performance.now() - inicio);
+    vista.classList.remove('tomando');
+    destello();
+    ponerPista('Foto tomada', true);
     marcarTomada();
-    await usarFoto(blob, origen);
+    await usarFoto(blob, origen, { auto, ms });
   } catch (e) {
     console.error(e);
     aviso('No se pudo tomar la foto. Intenta de nuevo.', 'error');
   } finally {
     capturando = false;
+    vista.classList.remove('tomando');
   }
 }
 
-/** Sigue con una foto (de la cámara en vivo o de la app de cámara del teléfono) */
-async function usarFoto(blob, origen = 'cámara del teléfono') {
+/**
+ * Sigue con una foto (de la cámara en vivo o de la app de cámara del teléfono).
+ * Si la tomó la captura automática y salió borrosa, se descarta y se repite
+ * (hasta 2 veces); si no, el recorte avisa.
+ */
+async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, ms = null } = {}) {
   const foto = await normalizarFoto(blob);
   guardarDiagnostico({
     video: video.videoWidth ? `${video.videoWidth} × ${video.videoHeight}` : 'sin video',
     foto: `${foto.anchoOriginal} × ${foto.altoOriginal}`,
-    origen
+    origen,
+    ms
   });
-  if (ajustes().rafaga && !sesion.reemplazar) {
-    // Sin parar: la hoja se busca sola y la página se arma en la cola
+  const rafaga = ajustes().rafaga && !sesion.reemplazar;
+  let esquinas = null, borrosa = false;
+  if (!rafaga || auto) {
+    esquinas = await buscarHoja(foto.canvas);
+    try { borrosa = ajustes().filtro !== 'dibujo' && await fotoBorrosa(foto.canvas, esquinas || TODA_LA_FOTO); } catch (e) {}
+    if (auto && borrosa && reintentos < 2) {
+      reintentos++;
+      soltarCanvas(foto.canvas);
+      lista = true; firmaUltima = null; pausaHasta = 0;
+      hojaDesde = performance.now(); quietoDesde = 0; // vuelve a exigir quietud completa
+      ponerPista('Salió borrosa. Otra vez: no te muevas…', true);
+      return;
+    }
+  }
+  reintentos = 0;
+  if (rafaga) {
+    // Sin parar: la página se arma en la cola
     const docId = await asegurarDocumento();
     contarPagina(await miniaturaDe(foto.canvas));
     const n = sesion.cantidad;
     encolar(docId, async () => {
-      const pagina = await crearPagina(foto);
+      const pagina = await crearPagina(foto, esquinas || undefined);
       if (esBorrosa(pagina)) aviso(`La foto ${n} salió borrosa: revísala en el documento.`, 'error', 5000);
       return pagina;
     });
     ponerPista(`Página ${sesion.cantidad} guardada`, true);
     return;
   }
-  const esquinas = await buscarHoja(foto.canvas);
-  let borrosa = false;
-  try { borrosa = await fotoBorrosa(foto.canvas, esquinas || TODA_LA_FOTO); } catch (e) {}
   abrirRecorte({
     fuente: foto.canvas,
     esquinas,
-    borrosa: borrosa && ajustes().filtro !== 'dibujo',
+    borrosa,
     textoCancelar: 'Repetir foto',
     alListo: async esq => {
       if (sesion.reemplazar) {
@@ -415,7 +500,11 @@ async function usarFoto(blob, origen = 'cámara del teléfono') {
       contarPagina(miniatura);
       volver('camara');
     },
-    alCancelar: () => volver('camara')
+    alCancelar: () => {
+      // "Repetir foto": la captura automática vuelve a tomar esta misma hoja
+      lista = true; firmaUltima = null; reintentos = 0;
+      volver('camara');
+    }
   });
 }
 

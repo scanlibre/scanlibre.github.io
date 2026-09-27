@@ -32,6 +32,7 @@ async function mostrar() {
   if (actual && actual !== vista) actual.ocultar?.();
   for (const n of Object.keys(vistas)) document.getElementById('vista-' + n).hidden = n !== nombre;
   actual = vista;
+  document.dispatchEvent(new CustomEvent('pantalla', { detail: nombre }));
   try {
     await vista.mostrar(params);
   } catch (e) {

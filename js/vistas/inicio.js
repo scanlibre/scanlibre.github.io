@@ -5,6 +5,7 @@ import { $, el, fechaCorta, paginasTexto, aviso, menu, hoja, tamanoLegible } fro
 import { listarDocumentos, obtenerPagina } from '../db.js';
 import { ir } from '../rutas.js';
 import { nuevaSesion, diagnosticoCamara } from './camara.js';
+import { VERSION } from '../version.js';
 import { nuevoDocumento, importarArchivos } from '../paginas.js';
 import { elegirArchivos } from '../archivos.js';
 import { crearRespaldo, restaurarRespaldo } from '../respaldo.js';
@@ -87,7 +88,8 @@ function acercaDe() {
         el('li', { text: 'Tus documentos se guardan solo en este navegador. Haz un respaldo de vez en cuando.' }),
         el('li', { text: 'Funciona sin conexión después de abrirla una vez.' })),
       el('p', { text: 'El código está en github.com/scanlibre/scanlibre.github.io' }),
-      cam && el('p', { class: 'diagnostico', text: `Cámara · última foto: ${cam.foto} (${cam.origen}) · video: ${cam.video}` })),
+      el('p', { class: 'acerca-version', text: `Versión ${VERSION}` }),
+      cam && el('p', { class: 'diagnostico', text: `Cámara · última foto: ${cam.foto} (${cam.origen}) · video: ${cam.video}` + (cam.ms ? ` · tardó ${(cam.ms / 1000).toFixed(1).replace('.', ',')} s` : '') })),
     el('div', { class: 'hoja-botones' }, el('button', { class: 'boton boton-primario', onclick: () => cerrar() }, 'Cerrar'))
   ]);
 }

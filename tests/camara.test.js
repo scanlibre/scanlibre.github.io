@@ -124,6 +124,45 @@ describe('Cámara que no enfoca', () => {
     await page.waitForSelector('#vista-camara:not([hidden])');
     assert.equal(await page.textContent('#camara-cuenta'), '0', 'no se guardó la foto borrosa');
   });
+
+  it('la captura automática repite sola la foto borrosa y, si sigue igual, avisa', async () => {
+    const page = await env.pagina();
+    await page.click('#inicio-escanear');
+    await page.waitForSelector('#camara-disparar:not([disabled])', { timeout: 20000 });
+    // Anota cada texto de la pista
+    await page.evaluate(() => {
+      window.pistas = [];
+      const p = document.querySelector('#camara-pista');
+      new MutationObserver(() => window.pistas.push(p.textContent)).observe(p, { childList: true, characterData: true, subtree: true });
+    });
+    await page.click('#camara-auto');
+    await page.waitForSelector('#vista-recorte:not([hidden])', { timeout: 60000 });
+    await page.waitForSelector('#recorte-borrosa:not([hidden])');
+    const pistas = await page.evaluate(() => window.pistas);
+    assert.equal(pistas.filter(t => t.startsWith('Salió borrosa')).length, 2, pistas.join(' | '));
+    assert.ok(pistas.includes('Tomando la foto… no te muevas'), 'avisa mientras toma la foto');
+    assert.deepEqual(page.errores, []);
+  });
+});
+
+describe('Cámara en una mano que tiembla', () => {
+  let env;
+  // Como en el video del Samsung: con la mano "quieta" la imagen igual se mueve un poco
+  before(async () => { env = await crearEntorno({ video: videoDePrueba(1, { temblor: 3 }) }); });
+  after(async () => { await env.cerrar(); });
+
+  it('la captura automática no se traba: toma la foto en unos segundos', async () => {
+    const page = await env.pagina();
+    await page.click('#inicio-escanear');
+    await page.waitForSelector('#camara-disparar:not([disabled])', { timeout: 20000 });
+    await page.click('#camara-rafaga');
+    const inicio = Date.now();
+    await page.click('#camara-auto');
+    await page.waitForFunction(() => document.querySelector('#camara-cuenta').textContent === '1', null, { timeout: 15000 });
+    const segundos = (Date.now() - inicio) / 1000;
+    assert.ok(segundos < 8, `tardó ${segundos} s`);
+    assert.deepEqual(page.errores, []);
+  });
 });
 
 describe('Sin cámara', () => {

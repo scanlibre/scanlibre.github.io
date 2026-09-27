@@ -29,6 +29,7 @@ export function procesarPagina(imagen, { esquinas, filtro = 'mejorada', rotacion
 export function nitidezDeHoja(imagen, esquinas) {
   const px = esquinas.map(p => ({ x: p.x * imagen.width, y: p.y * imagen.height }));
   const t = tamanoEnderezado(px, imagen.width, imagen.height);
-  const k = Math.min(1, 1000 / Math.max(t.ancho, t.alto));
+  // A 800 px de ancho, como mide medirNitidez la página guardada
+  const k = Math.min(1, 800 / t.ancho, 2400 / t.alto);
   return medirNitidez(enderezar(imagen, px, Math.max(8, Math.round(t.ancho * k)), Math.max(8, Math.round(t.alto * k))));
 }

@@ -7,7 +7,8 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 ## Qué hace
 
 - **Cámara con la hoja marcada en vivo.** Encuentra la hoja sola, también con sombras, sobre mesas de color o con poco contraste.
-- **Captura automática** cuando la hoja se queda quieta y la imagen está nítida, y **ráfaga** para escanear un cuaderno entero pasando las páginas, sin tocar la pantalla.
+- **Foto sin movimiento:** la foto se toma cuando el teléfono está quieto (giroscopio y video). Al tocar el botón espera a que la mano se asiente, y avisa «Tomando la foto… no te muevas» hasta que la foto llega.
+- **Captura automática** cuando la hoja se queda quieta y la imagen está nítida (si sale borrosa, la repite sola), y **ráfaga** para escanear un cuaderno entero pasando las páginas, sin tocar la pantalla. Nunca se queda trabada: si la mano tiembla, después de unos segundos toma la foto en el momento más quieto.
 - **Toca para enfocar** en la parte de la hoja que quieras (si el teléfono lo permite).
 - **Aviso de foto borrosa:** ningún filtro arregla una foto movida o desenfocada, así que la app lo dice al momento y ofrece **Repetir foto**. Las páginas borrosas se marcan en el documento y se pueden **volver a tomar** sin perder su lugar.
 - **Enderezado real:** corrige la perspectiva y calcula la proporción verdadera de la hoja aunque la foto se haya tomado en ángulo.
@@ -30,6 +31,7 @@ La detección, los filtros, el PDF y el respaldo están escritos para esta app, 
 | Proporción | `js/imagen/geometria.js` | Homografía y proporción real de la hoja (método de Zhang y He). |
 | Enderezado | `js/imagen/perspectiva.js` | Transformación de perspectiva con interpolación bilineal. |
 | Filtros | `js/imagen/filtros.js` | Estima el brillo del papel por zonas y divide por él (quita sombras sin blanquear los recuadros de color), balance de blancos, y umbral de Sauvola para B/N. |
+| Quietud | `js/imagen/movimiento.js` | Compara cada cuadro del video con el anterior (sin contar los cambios de exposición) y, si hay, lee el giroscopio. |
 | Nitidez | `js/imagen/nitidez.js` | Mide qué tan filosos son los bordes de las letras (gradiente entre contraste local, en el centro de cada borde). No depende de la luz ni del tamaño de la foto. |
 | Worker | `js/imagen/worker.js` | Las cuentas pesadas corren aparte para que la app no se trabe. |
 | PDF | `js/pdf.js` | Escritor de PDF propio: JPEG tal cual (DCTDecode) y B/N a 1 bit (FlateDecode). Con OCR, cada palabra va invisible (modo 3) en su lugar, en Courier estirada al ancho de la palabra. |

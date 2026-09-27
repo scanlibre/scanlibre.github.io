@@ -15,9 +15,13 @@ export const TODA_LA_FOTO = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x
 /** ¿La página salió borrosa? (en un dibujo a lápiz lo suave es normal: no se avisa) */
 export const esBorrosa = p => p.filtro !== 'dibujo' && typeof p.nitidez === 'number' && p.nitidez < UMBRAL_BORROSA;
 
-/** ¿La hoja de esta foto se ve borrosa? (a poca resolución, para avisar antes de guardar) */
+/**
+ * ¿La hoja de esta foto se ve borrosa? (para avisar antes de guardar). Se mide
+ * con la hoja a 800 px de ancho, igual que la página guardada: así el recorte
+ * y el documento dicen lo mismo.
+ */
 export async function fotoBorrosa(fuente, esquinas) {
-  return (await medir(aImageData(fuente, 1600), esquinas)).borrosa;
+  return (await medir(aImageData(fuente, 2400), esquinas)).borrosa;
 }
 
 /** Busca la hoja en la foto (canvas o bitmap). Devuelve las esquinas o null */

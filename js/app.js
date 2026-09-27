@@ -21,12 +21,20 @@ iniciarRutas();
 // Modo sin conexión (el navegador solo lo permite en https o en la propia computadora)
 const seguro = location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname);
 if ('serviceWorker' in navigator && seguro) {
-  // Cuando llega una versión nueva: en el inicio se recarga sola; en otra pantalla se avisa, para no cortar lo que se está haciendo
+  // Cuando llega una versión nueva: en el inicio se recarga sola; en otra
+  // pantalla se espera a volver al inicio, para no cortar lo que se está haciendo
   const habiaVersion = !!navigator.serviceWorker.controller;
+  const enInicio = () => !location.hash || location.hash === '#/';
+  let nueva = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!habiaVersion) return; // primera vez que se instala
-    if (!location.hash || location.hash === '#/') location.reload();
-    else aviso('Hay una versión nueva de ScanLibre: se usará la próxima vez que la abras.');
+    if (enInicio()) return location.reload();
+    nueva = true;
+    aviso('Hay una versión nueva de ScanLibre: se pondrá al volver al inicio.');
   });
-  navigator.serviceWorker.register('sw.js').catch(e => console.warn('Sin modo sin conexión:', e));
+  document.addEventListener('pantalla', e => { if (nueva && e.detail === 'inicio') location.reload(); });
+  navigator.serviceWorker.register('sw.js').then(registro => {
+    // Una app instalada puede quedar abierta días: al volver a ella se busca si hay versión nueva
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) registro.update().catch(() => {}); });
+  }).catch(e => console.warn('Sin modo sin conexión:', e));
 }
