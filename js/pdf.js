@@ -50,16 +50,20 @@ function fechaPDF(d) {
   return `D:${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
-/** Texto para el diccionario Info: UTF-16BE en hexadecimal (admite tildes y ñ) */
-function textoPDF(s) {
-  let hex = 'FEFF';
+/** Texto para el diccionario Info: UTF-16BE con su marca (admite tildes y ñ) */
+function utf16(s) {
+  const unidades = [0xfeff];
   for (const c of String(s)) {
     const cp = c.codePointAt(0);
-    const unidades = cp > 0xffff ? [0xd800 + ((cp - 0x10000) >> 10), 0xdc00 + ((cp - 0x10000) & 0x3ff)] : [cp];
-    for (const u of unidades) hex += u.toString(16).toUpperCase().padStart(4, '0');
+    if (cp > 0xffff) unidades.push(0xd800 + ((cp - 0x10000) >> 10), 0xdc00 + ((cp - 0x10000) & 0x3ff));
+    else unidades.push(cp);
   }
-  return `<${hex}>`;
+  const b = new Uint8Array(unidades.length * 2);
+  unidades.forEach((u, i) => { b[2 * i] = u >> 8; b[2 * i + 1] = u & 255; });
+  return b;
 }
+
+const hexDe = b => [...b].map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
 
 const num = n => (Math.round(n * 100) / 100).toString();
 
@@ -110,34 +114,16 @@ function capaDeTexto({ ancho, alto, lineas }, dx, dy, dw, dh) {
 }
 
 /**
- * Arma el PDF.
- * @param paginas [{ tipo: 'jpeg', bytes } | { tipo: 'bits', bytes (zlib), ancho, alto }],
- *                cada una puede traer `texto` ({ ancho, alto, lineas }, del lector de texto)
- * @param opciones.tamano 'carta' | 'a4' | 'foto' (la hoja toma la forma de la imagen)
- * @returns Uint8Array con el archivo
+ * Los objetos del PDF, todavía sin escribir: así se pueden cifrar antes.
+ * Un objeto es { n, cuerpo } o, si lleva datos, { n, dicc, flujo } (el /Length se pone al escribir).
  */
-export function crearPDF(paginas, { tamano = 'carta', titulo = 'Escaneo', fecha = new Date() } = {}) {
+function armar(paginas, { tamano = 'carta', titulo = 'Escaneo', fecha = new Date() } = {}) {
   if (!paginas.length) throw new Error('El documento no tiene páginas');
-  const partes = [];
-  let largo = 0;
-  const offsets = [];
-  const poner = p => { const b = typeof p === 'string' ? texto.encode(p) : p; partes.push(b); largo += b.length; };
-  const objeto = (n, cuerpo, flujo) => {
-    offsets[n] = largo;
-    poner(`${n} 0 obj\n${cuerpo}\n`);
-    if (flujo) { poner('stream\n'); poner(flujo); poner('\nendstream\n'); }
-    poner('endobj\n');
-  };
-
-  poner('%PDF-1.4\n');
-  poner(new Uint8Array([0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a])); // marca de archivo binario
-
   const PRIMERA = 5; // 1 catálogo, 2 páginas, 3 datos, 4 letra del texto invisible
+  const objetos = [];
   const kids = paginas.map((_, i) => `${PRIMERA + i * 3} 0 R`).join(' ');
-  objeto(1, '<< /Type /Catalog /Pages 2 0 R >>');
-  objeto(2, `<< /Type /Pages /Kids [${kids}] /Count ${paginas.length} >>`);
-  objeto(3, `<< /Title ${textoPDF(titulo)} /Producer (ScanLibre) /Creator (ScanLibre) /CreationDate (${fechaPDF(fecha)}) >>`);
-  objeto(4, '<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>');
+  objetos.push({ n: 2, cuerpo: `<< /Type /Pages /Kids [${kids}] /Count ${paginas.length} >>` });
+  objetos.push({ n: 4, cuerpo: '<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>' });
 
   paginas.forEach((pag, i) => {
     const nPag = PRIMERA + i * 3, nCont = nPag + 1, nImg = nPag + 2;
@@ -165,22 +151,72 @@ export function crearPDF(paginas, { tamano = 'carta', titulo = 'Escaneo', fecha 
     const conTexto = pag.texto?.lineas?.length > 0;
     let dibujo = `q ${num(dw)} 0 0 ${num(dh)} ${num(dx)} ${num(dy)} cm /Im0 Do Q`;
     if (conTexto) dibujo += '\n' + capaDeTexto(pag.texto, dx, dy, dw, dh);
-    const contenido = texto.encode(dibujo);
     const letra = conTexto ? ' /Font << /F1 4 0 R >>' : '';
-    objeto(nPag, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(pw)} ${num(ph)}] /Resources << /XObject << /Im0 ${nImg} 0 R >>${letra} /ProcSet [/PDF /Text /ImageB /ImageC] >> /Contents ${nCont} 0 R >>`);
-    objeto(nCont, `<< /Length ${contenido.length} >>`, contenido);
-    objeto(nImg, `<< /Type /XObject /Subtype /Image /Width ${ancho} /Height ${alto} ${dicc} /Length ${pag.bytes.length} >>`, pag.bytes);
+    objetos.push({ n: nPag, cuerpo: `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(pw)} ${num(ph)}] /Resources << /XObject << /Im0 ${nImg} 0 R >>${letra} /ProcSet [/PDF /Text /ImageB /ImageC] >> /Contents ${nCont} 0 R >>` });
+    objetos.push({ n: nCont, dicc: '<<', flujo: texto.encode(dibujo) });
+    objetos.push({ n: nImg, dicc: `<< /Type /XObject /Subtype /Image /Width ${ancho} /Height ${alto} ${dicc}`, flujo: pag.bytes });
   });
+  // Los datos del documento: textos sueltos (se cifran aparte si hay contraseña)
+  const info = { Title: utf16(titulo), Producer: texto.encode('ScanLibre'), Creator: texto.encode('ScanLibre'), CreationDate: texto.encode(fechaPDF(fecha)) };
+  return { objetos, info, total: PRIMERA + paginas.length * 3 };
+}
 
-  const total = PRIMERA + paginas.length * 3;
+/** Escribe el archivo: encabezado, objetos, tabla xref y trailer */
+function escribir({ objetos, info, total }, { cifrado = null } = {}) {
+  const partes = [];
+  let largo = 0;
+  const offsets = [];
+  const poner = p => { const b = typeof p === 'string' ? texto.encode(p) : p; partes.push(b); largo += b.length; };
+  const objeto = o => {
+    offsets[o.n] = largo;
+    if (!o.flujo) { poner(`${o.n} 0 obj\n${o.cuerpo}\nendobj\n`); return; }
+    poner(`${o.n} 0 obj\n${o.dicc} /Length ${o.flujo.length} >>\nstream\n`);
+    poner(o.flujo);
+    poner('\nendstream\nendobj\n');
+  };
+  // AES-256 es de PDF 2.0; como "1.7 con la extensión 8 de Adobe" lo abren también los lectores de antes
+  poner(cifrado ? '%PDF-1.7\n' : '%PDF-1.4\n');
+  poner(new Uint8Array([0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a])); // marca de archivo binario
+  const extension = cifrado ? ' /Extensions << /ADBE << /BaseVersion /1.7 /ExtensionLevel 8 >> >>' : '';
+  objeto({ n: 1, cuerpo: `<< /Type /Catalog /Pages 2 0 R${extension} >>` });
+  objeto({ n: 3, cuerpo: '<< ' + Object.entries(info).map(([k, v]) => `/${k} <${hexDe(v)}>`).join(' ') + ' >>' });
+  for (const o of objetos) objeto(o);
+  let n = total;
+  if (cifrado) objeto({ n: n++, cuerpo: cifrado.diccionario });
   const inicioXref = largo;
-  let xref = `xref\n0 ${total}\n0000000000 65535 f \n`;
-  for (let n = 1; n < total; n++) xref += `${String(offsets[n]).padStart(10, '0')} 00000 n \n`;
+  let xref = `xref\n0 ${n}\n0000000000 65535 f \n`;
+  for (let i = 1; i < n; i++) xref += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
   poner(xref);
-  poner(`trailer\n<< /Size ${total} /Root 1 0 R /Info 3 0 R >>\nstartxref\n${inicioXref}\n%%EOF\n`);
+  const extra = cifrado ? ` /Encrypt ${n - 1} 0 R /ID [<${cifrado.id}> <${cifrado.id}>]` : '';
+  poner(`trailer\n<< /Size ${n} /Root 1 0 R /Info 3 0 R${extra} >>\nstartxref\n${inicioXref}\n%%EOF\n`);
 
   const out = new Uint8Array(largo);
   let o = 0;
   for (const p of partes) { out.set(p, o); o += p.length; }
   return out;
+}
+
+/**
+ * Arma el PDF.
+ * @param paginas [{ tipo: 'jpeg', bytes } | { tipo: 'bits', bytes (zlib), ancho, alto }],
+ *                cada una puede traer `texto` ({ ancho, alto, lineas }, del lector de texto)
+ * @param opciones.tamano 'carta' | 'a4' | 'foto' (la hoja toma la forma de la imagen)
+ * @returns Uint8Array con el archivo
+ */
+export function crearPDF(paginas, opciones) {
+  return escribir(armar(paginas, opciones));
+}
+
+/**
+ * El mismo PDF, pero se abre solo con la contraseña (AES-256). Se cifran las
+ * imágenes, el texto de cada página y los datos del documento (el título).
+ */
+export async function crearPDFConContrasena(paginas, opciones, contrasena) {
+  if (!contrasena) throw new Error('Falta la contraseña');
+  const { prepararCifrado } = await import('./cifrado.js');
+  const armado = armar(paginas, opciones);
+  const cifrado = await prepararCifrado(contrasena);
+  for (const o of armado.objetos) if (o.flujo) o.flujo = await cifrado.cifrar(o.flujo);
+  for (const k of Object.keys(armado.info)) armado.info[k] = await cifrado.cifrar(armado.info[k]);
+  return escribir(armado, { cifrado });
 }

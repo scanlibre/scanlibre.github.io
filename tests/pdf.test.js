@@ -1,7 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { deflateSync, inflateSync } from 'node:zlib';
-import { crearPDF, infoJPEG, aBits, cadenaPDF } from '../js/pdf.js';
+import { createHash, createDecipheriv, createCipheriv } from 'node:crypto';
+import { crearPDF, crearPDFConContrasena, infoJPEG, aBits, cadenaPDF } from '../js/pdf.js';
 import { JPEG_COLOR_16x8, JPEG_GRIS_10x20, JPEG_PROGRESIVO_12x6 } from './jpegs.js';
 
 const texto = b => Buffer.from(b).toString('latin1');
@@ -99,5 +100,69 @@ describe('PDF', () => {
 
   it('un documento sin páginas no se puede exportar', () => {
     assert.throws(() => crearPDF([]), /no tiene páginas/);
+  });
+});
+
+// ── PDF con contraseña: se comprueba con otra implementación (node:crypto) ──
+
+/** Algoritmo 2.B de ISO 32000-2, escrito aparte con node:crypto */
+function hash2B(clave, sal, u = Buffer.alloc(0)) {
+  let k = createHash('sha256').update(Buffer.concat([clave, sal, u])).digest();
+  let e = Buffer.alloc(1);
+  for (let i = 0; i < 64 || e[e.length - 1] > i - 32; i++) {
+    const k1 = Buffer.concat(Array(64).fill(Buffer.concat([clave, k, u])));
+    const c = createCipheriv('aes-128-cbc', k.subarray(0, 16), k.subarray(16, 32)).setAutoPadding(false);
+    e = Buffer.concat([c.update(k1), c.final()]);
+    const suma = [...e.subarray(0, 16)].reduce((s, b) => s + b, 0);
+    k = createHash(['sha256', 'sha384', 'sha512'][suma % 3]).update(e).digest();
+  }
+  return k.subarray(0, 32);
+}
+const descifrar = (clave, datos) => {
+  const d = createDecipheriv('aes-256-cbc', clave, datos.subarray(0, 16));
+  return Buffer.concat([d.update(datos.subarray(16)), d.final()]);
+};
+
+describe('PDF con contraseña (AES-256)', () => {
+  const contrasena = 'Mi clave ñ 2026';
+  const textoLeido = { ancho: 16, alto: 8, lineas: [{ y0: 1, y1: 3, base: null, palabras: [{ t: 'Hola', x0: 1, y0: 1, x1: 7, y1: 3 }] }] };
+  let pdf, s, dicc;
+  it('lleva el cifrado estándar revisión 6 y no deja nada a la vista', async () => {
+    pdf = Buffer.from(await crearPDFConContrasena([{ tipo: 'jpeg', bytes: JPEG_COLOR_16x8, texto: textoLeido }], { tamano: 'foto', titulo: 'Tarea secreta' }, contrasena));
+    s = pdf.toString('latin1');
+    assert.ok(s.startsWith('%PDF-1.7'));
+    dicc = s.match(/<< \/Filter \/Standard [^]*?\/EncryptMetadata true >>/)[0];
+    assert.match(dicc, /\/V 5 \/R 6 \/Length 256/);
+    assert.match(dicc, /\/CFM \/AESV3/);
+    assert.match(s, /\/Encrypt \d+ 0 R \/ID \[<[0-9A-F]{32}> <[0-9A-F]{32}>\]/);
+    assert.doesNotMatch(s, /Im0 Do|Hola|BT 3 Tr/, 'la página va cifrada');
+    assert.ok(!pdf.includes(Buffer.from(JPEG_COLOR_16x8)), 'la imagen va cifrada');
+    assert.doesNotMatch(s, /FEFF0054/, 'el título va cifrado');
+  });
+
+  it('con la contraseña se descifra: la comprueba y abre la página, la imagen y el título', () => {
+    const campo = nombre => Buffer.from(dicc.match(new RegExp(`/${nombre} <([0-9A-F]+)>`))[1], 'hex');
+    const clave = Buffer.from(contrasena.normalize('NFKC'), 'utf8');
+    const U = campo('U'), UE = campo('UE');
+    assert.equal(U.length, 48);
+    assert.deepEqual(hash2B(clave, U.subarray(32, 40)), U.subarray(0, 32), 'la contraseña se comprueba');
+    assert.notDeepEqual(hash2B(Buffer.from('otra'), U.subarray(32, 40)), U.subarray(0, 32), 'otra contraseña no');
+    const d = createDecipheriv('aes-256-cbc', hash2B(clave, U.subarray(40, 48)), Buffer.alloc(16)).setAutoPadding(false);
+    const archivo = Buffer.concat([d.update(UE), d.final()]);
+    // Permisos: descifrados dicen "adb" en su lugar
+    const pe = createDecipheriv('aes-256-ecb', archivo, null).setAutoPadding(false);
+    const permisos = Buffer.concat([pe.update(campo('Perms')), pe.final()]);
+    assert.equal(permisos.subarray(9, 12).toString(), 'adb');
+    // Cada stream: IV + AES-256-CBC
+    const flujos = [...s.matchAll(/\/Length (\d+) >>\nstream\n/g)].map(m => pdf.subarray(m.index + m[0].length, m.index + m[0].length + Number(m[1])));
+    const claros = flujos.map(f => descifrar(archivo, f));
+    assert.ok(claros.some(c => /\/Im0 Do/.test(c.toString('latin1')) && /\(Hola\) Tj/.test(c.toString('latin1'))), 'el contenido de la página');
+    assert.ok(claros.some(c => c.equals(Buffer.from(JPEG_COLOR_16x8))), 'la imagen, igualita');
+    const titulo = descifrar(archivo, Buffer.from(s.match(/\/Title <([0-9A-F]+)>/)[1], 'hex'));
+    assert.equal(titulo.subarray(2).swap16().toString('utf16le'), 'Tarea secreta');
+  });
+
+  it('sin contraseña no se arma', async () => {
+    await assert.rejects(crearPDFConContrasena([{ tipo: 'jpeg', bytes: JPEG_COLOR_16x8 }], {}, ''), /Falta la contraseña/);
   });
 });

@@ -300,6 +300,8 @@ img { display: block; }
   .borrosa-aviso-pagina strong { color: #fff7d6; }
 }
 /* La página tenía renglones curvos y se enderezaron (o se deshizo) */
+.campo-clave { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.campo-clave .campo { flex: 1; min-width: 0; margin: 0; }
 .curva-aviso {
   display: flex; align-items: center; gap: 8px; margin: 0 16px 6px; padding: 2px 4px 2px 12px;
   border-radius: 12px; background: var(--superficie-2); color: var(--texto-2);

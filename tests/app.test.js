@@ -64,6 +64,30 @@ describe('La app', () => {
     assert.equal(pdf.nombre, nombre + '.pdf');
   });
 
+  it('el PDF puede salir con contraseña (y sin escribirla no se arma)', async () => {
+    const page = await env.pagina();
+    await importarFoto(page, foto1.ruta);
+    await page.click('#doc-pdf');
+    await page.click('dialog .opcion:has-text("Con contraseña")');
+    await page.click('dialog .hoja-botones .boton-primario');
+    await page.waitForSelector('.aviso-error:has-text("Escribe la contraseña")');
+    assert.equal(await page.isVisible('.resultado-pdf'), false);
+    await page.fill('dialog input[type="password"]', 'clave de prueba');
+    await page.click('dialog .campo-clave .boton'); // Ver
+    assert.equal(await page.getAttribute('dialog .campo-clave .campo', 'type'), 'text');
+    await page.click('dialog .hoja-botones .boton-primario');
+    await page.waitForSelector('.resultado-pdf', { timeout: 30000 });
+    assert.match(await page.textContent('.resultado-pdf small'), /con contraseña/);
+    const [descarga] = await Promise.all([page.waitForEvent('download'), page.click('dialog .hoja-botones .boton-secundario')]);
+    const pdf = readFileSync(await descarga.path()).toString('latin1');
+    assert.ok(pdf.startsWith('%PDF-1.7'));
+    assert.match(pdf, /\/Filter \/Standard \/V 5 \/R 6/);
+    assert.doesNotMatch(pdf, /Im0 Do/, 'el contenido va cifrado');
+    // La contraseña no queda guardada en el teléfono
+    assert.doesNotMatch(await page.evaluate(() => JSON.stringify(localStorage)), /clave de prueba/);
+    assert.deepEqual(page.errores, []);
+  });
+
   it('en blanco y negro la página se guarda en PNG y va a 1 bit en el PDF', async () => {
     const page = await env.pagina();
     await importarFoto(page, foto1.ruta);

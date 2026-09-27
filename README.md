@@ -20,6 +20,7 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Carpetas por clase:** lo que escaneas dentro de una carpeta se guarda ahí y se nombra solo («Cálculo – 27 sept»). Los documentos se pueden mover de carpeta; borrar una carpeta no borra sus documentos.
 - **Documentos de varias páginas:** reordenar, girar, recortar de nuevo y borrar páginas, todo gratis.
 - **PDF** en tamaño carta, A4 o con la forma de la foto, y en tres calidades. La calidad *Liviana* sirve para subir a plataformas con límite de tamaño. Las páginas en B/N van a 1 bit por píxel: nítidas y livianas (unos 50 KB por página).
+- **PDF con contraseña, gratis:** cifrado AES-256 estándar (el que abren Adobe, Chrome y los visores de Android e iPhone). La contraseña no se guarda en ningún lado.
 - **Compartir** directo a WhatsApp, Drive o Classroom, o descargar el PDF.
 - **Respaldo gratis:** todos los documentos en un `.zip` para guardar donde quieras y restaurarlos en otro teléfono.
 - **Tema claro u oscuro** según el teléfono. Las páginas escaneadas nunca se invierten.
@@ -41,6 +42,7 @@ La detección, los filtros, el PDF y el respaldo están escritos para esta app, 
 | PDF | `js/pdf.js` | Escritor de PDF propio: JPEG tal cual (DCTDecode) y B/N a 1 bit (FlateDecode). Con OCR, cada palabra va invisible (modo 3) en su lugar, en Courier estirada al ancho de la palabra. |
 | Lectura | `js/imagen/lectura.js` | Prepara la página para el OCR: papel parejo, contraste como el filtro Gris y máscara de enfoque. |
 | OCR | `js/ocr.js` | Tesseract.js 7 (modelos `best_int` de español e inglés). Se carga la primera vez que se usa (unos 6 MB en español) y el service worker lo guarda para usarlo sin conexión. |
+| Contraseña | `js/cifrado.js` | Cifrado estándar de PDF, revisión 6 (AES-256) con WebCrypto: el "algoritmo 2.B" para la clave y AES-CBC para cada imagen, página y texto. |
 | Respaldo | `js/respaldo.js` | ZIP propio para el respaldo. |
 | Guardado | `js/db.js` | IndexedDB, solo en el teléfono. |
 
@@ -87,7 +89,7 @@ Lo que sigue sale de lo que la gente les pide y les reclama a CamScanner, Genius
 - ✅ OCR con Tesseract.js 7 (español e inglés): copiar el texto y PDF con texto buscable.
 - ✅ Aviso de foto borrosa, volver a tomar una página y tocar para enfocar.
 - ✅ Carpetas por clase y nombre automático («Cálculo – 27 sept»).
-- PDF con contraseña, gratis.
+- ✅ PDF con contraseña, gratis (AES-256).
 - Brillo y contraste a mano, guardables como perfil.
 - Buscar texto dentro de todos los documentos.
 

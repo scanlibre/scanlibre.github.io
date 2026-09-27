@@ -1,7 +1,7 @@
 // ScanLibre · exportar.js
 // Arma el PDF del documento con la calidad elegida y lo comparte o descarga.
 
-import { crearPDF, aBits } from './pdf.js';
+import { crearPDF, crearPDFConContrasena, aBits } from './pdf.js';
 import { abrirFoto, aCanvas, canvasABlob } from './fotos.js';
 
 export const CALIDADES = {
@@ -26,7 +26,7 @@ async function comprimir(bytes) {
  * @param alAvanzar (hechas, total) para mostrar el avance
  * @returns Blob del PDF
  */
-export async function generarPDF(doc, paginas, { tamano = 'carta', calidad = 'normal', conTexto = false } = {}, alAvanzar) {
+export async function generarPDF(doc, paginas, { tamano = 'carta', calidad = 'normal', conTexto = false, contrasena = '' } = {}, alAvanzar) {
   const cfg = CALIDADES[calidad] || CALIDADES.normal;
   const partes = [];
   for (let i = 0; i < paginas.length; i++) {
@@ -46,7 +46,9 @@ export async function generarPDF(doc, paginas, { tamano = 'carta', calidad = 'no
     c.width = c.height = 0; // soltar la memoria del canvas ya
   }
   alAvanzar?.(paginas.length, paginas.length);
-  return new Blob([crearPDF(partes, { tamano, titulo: doc.nombre })], { type: 'application/pdf' });
+  const opciones = { tamano, titulo: doc.nombre };
+  const bytes = contrasena ? await crearPDFConContrasena(partes, opciones, contrasena) : crearPDF(partes, opciones);
+  return new Blob([bytes], { type: 'application/pdf' });
 }
 
 export function puedeCompartir(blob, nombre) {

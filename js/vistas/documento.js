@@ -164,12 +164,31 @@ async function crearPDF() {
     } },
       el('strong', { text: 'Texto buscable' }),
       el('small', { text: 'Para buscar y copiar palabras dentro del PDF. Lee el texto de cada página, así que tarda un poco más.' }));
+    // Contraseña: no se guarda en ningún lado (ni en el teléfono): se escribe cada vez
+    const clave = el('input', { class: 'campo', type: 'password', autocomplete: 'new-password', 'aria-label': 'Contraseña del PDF', placeholder: 'Contraseña', enterkeyhint: 'done' });
+    const ver = el('button', { class: 'boton boton-fantasma', type: 'button', onclick: () => {
+      const mostrar = clave.type === 'password';
+      clave.type = mostrar ? 'text' : 'password';
+      ver.textContent = mostrar ? 'Ocultar' : 'Ver';
+    } }, 'Ver');
+    const campoClave = el('div', { class: 'campo-clave', hidden: true }, clave, ver);
+    const conClave = el('button', { class: 'opcion', 'aria-pressed': 'false', onclick: () => {
+      const si = conClave.getAttribute('aria-pressed') !== 'true';
+      conClave.setAttribute('aria-pressed', String(si));
+      campoClave.hidden = !si;
+      if (si) clave.focus();
+    } },
+      el('strong', { text: 'Con contraseña' }),
+      el('small', { text: 'Para abrirlo hay que escribirla (cifrado AES-256). Si la olvidas, no hay forma de recuperarla.' }));
     const barra = el('span');
     const progreso = el('div', { class: 'progreso', hidden: true }, barra);
     const estado = el('p', { class: 'hoja-detalle', hidden: true, 'aria-live': 'polite' });
     const resultado = el('div');
     const avance = x => { barra.style.width = `${Math.round(100 * x)}%`; };
     const crear = el('button', { class: 'boton boton-primario', onclick: async () => {
+      const conContrasena = conClave.getAttribute('aria-pressed') === 'true';
+      const contrasena = conContrasena ? clave.value : '';
+      if (conContrasena && !contrasena) { aviso('Escribe la contraseña del PDF.', 'error'); clave.focus(); return; }
       crear.disabled = true;
       progreso.hidden = false;
       cambiarAjuste('pdfTamano', eleccion.tamano);
@@ -194,7 +213,7 @@ async function crearPDF() {
           }
           estado.textContent = 'Armando el PDF…';
         }
-        const blob = await generarPDF(doc, conOcr, { ...eleccion, conTexto: eleccion.texto }, (hechas, total) => avance(parteOcr + (1 - parteOcr) * hechas / total));
+        const blob = await generarPDF(doc, conOcr, { ...eleccion, conTexto: eleccion.texto, contrasena }, (hechas, total) => avance(parteOcr + (1 - parteOcr) * hechas / total));
         estado.hidden = true;
         const nombre = nombreArchivo(doc.nombre, 'pdf');
         progreso.hidden = true;
@@ -202,7 +221,7 @@ async function crearPDF() {
         opciones.hidden = true;
         resultado.replaceChildren(
           el('div', { class: 'resultado-pdf' }, icono('pdf'),
-            el('div', {}, el('strong', { text: nombre }), el('small', { text: `${paginasTexto(paginas.length)} · ${tamanoLegible(blob.size)}` }))),
+            el('div', {}, el('strong', { text: nombre }), el('small', { text: [paginasTexto(paginas.length), tamanoLegible(blob.size), contrasena && 'con contraseña'].filter(Boolean).join(' · ') }))),
           el('div', { class: 'hoja-botones' },
             el('button', { class: 'boton boton-secundario', onclick: () => { descargar(blob, nombre); aviso('PDF descargado.', 'exito'); } }, icono('descargar'), 'Descargar'),
             puedeCompartir(blob, nombre) && el('button', { class: 'boton boton-primario', onclick: async () => {
@@ -219,7 +238,8 @@ async function crearPDF() {
     const opciones = el('div', {},
       grupo('Tamaño de hoja', 'tamano', TAMANOS_HOJA, true),
       grupo('Calidad', 'calidad', CALIDADES, false),
-      el('div', { class: 'grupo' }, el('h3', { class: 'grupo-titulo', text: 'Texto' }), el('div', { class: 'opciones' }, conTexto)));
+      el('div', { class: 'grupo' }, el('h3', { class: 'grupo-titulo', text: 'Texto' }), el('div', { class: 'opciones' }, conTexto)),
+      el('div', { class: 'grupo' }, el('h3', { class: 'grupo-titulo', text: 'Contraseña' }), el('div', { class: 'opciones' }, conClave), campoClave));
     return [
       el('h2', { class: 'hoja-titulo', text: 'Crear PDF' }),
       el('p', { class: 'hoja-detalle', text: `${doc.nombre} · ${paginasTexto(paginas.length)}` }),
