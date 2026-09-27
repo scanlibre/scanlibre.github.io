@@ -14,7 +14,8 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Enderezado real:** corrige la perspectiva y calcula la proporción verdadera de la hoja aunque la foto se haya tomado en ángulo.
 - **Esquinas a mano** con lupa; se ven sobre papel blanco y sobre fondos oscuros.
 - **Filtros:** Original, Mejorada (papel blanco sin sombras y sin saturar los colores), Dibujo (para lápiz y bocetos: se ven hasta los trazos más suaves), Gris y B/N (umbral local tipo Sauvola: no se come el texto suave ni deja manchas negras con la sombra del lomo de un libro).
-- **Texto (OCR), gratis y sin internet:** copiar o compartir el texto de una página o de todo el documento, en español, inglés o los dos. Y **PDF con texto buscable**: se ve igual, pero se pueden buscar y copiar las palabras.
+- **Texto (OCR), gratis y sin internet:** copiar o compartir el texto de una página o de todo el documento, en español, inglés o los dos. Y **PDF con texto buscable**: se ve igual, pero se pueden buscar y copiar las palabras. Antes de leer, la página se prepara (papel parejo, más contraste y nitidez): así lee también la letra chica de un libro.
+- **Fotos a resolución completa** (hasta 4000 px, 12 MP): la letra chica conserva el detalle.
 - **Documentos de varias páginas:** reordenar, girar, recortar de nuevo y borrar páginas, todo gratis.
 - **PDF** en tamaño carta, A4 o con la forma de la foto, y en tres calidades. La calidad *Liviana* sirve para subir a plataformas con límite de tamaño. Las páginas en B/N van a 1 bit por píxel: nítidas y livianas (unos 50 KB por página).
 - **Compartir** directo a WhatsApp, Drive o Classroom, o descargar el PDF.
@@ -35,6 +36,7 @@ La detección, los filtros, el PDF y el respaldo están escritos para esta app, 
 | Nitidez | `js/imagen/nitidez.js` | Mide qué tan filosos son los bordes de las letras (gradiente entre contraste local, en el centro de cada borde). No depende de la luz ni del tamaño de la foto. |
 | Worker | `js/imagen/worker.js` | Las cuentas pesadas corren aparte para que la app no se trabe. |
 | PDF | `js/pdf.js` | Escritor de PDF propio: JPEG tal cual (DCTDecode) y B/N a 1 bit (FlateDecode). Con OCR, cada palabra va invisible (modo 3) en su lugar, en Courier estirada al ancho de la palabra. |
+| Lectura | `js/imagen/lectura.js` | Prepara la página para el OCR: papel parejo, contraste como el filtro Gris y máscara de enfoque. |
 | OCR | `js/ocr.js` | Tesseract.js 7 (modelos `best_int` de español e inglés). Se carga la primera vez que se usa (unos 6 MB en español) y el service worker lo guarda para usarlo sin conexión. |
 | Respaldo | `js/respaldo.js` | ZIP propio para el respaldo. |
 | Guardado | `js/db.js` | IndexedDB, solo en el teléfono. |

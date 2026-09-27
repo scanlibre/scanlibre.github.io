@@ -72,7 +72,9 @@ export async function reprocesar(pagina, cambios) {
 }
 
 /** Qué versión de la página es: si cambia (filtro, recorte, giro), el texto leído deja de servir */
-const versionDe = p => `${p.filtro}|${p.rotacion}|${p.procAncho}x${p.procAlto}|${JSON.stringify(p.esquinas)}`;
+// LECTOR sube cuando cambia cómo se lee (así los textos viejos se vuelven a leer)
+const LECTOR = 2;
+const versionDe = p => `l${LECTOR}|${p.filtro}|${p.rotacion}|${p.procAncho}x${p.procAlto}|${JSON.stringify(p.esquinas)}`;
 
 /**
  * Texto de la página con el lector de texto (OCR). Si ya se leyó con ese

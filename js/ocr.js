@@ -2,6 +2,11 @@
 // Lector de texto (OCR) con Tesseract.js. Todo va dentro de la app
 // (vendor/tesseract): nada se sube a internet. Se carga la primera vez que se
 // usa y el lector se cierra solo después de un minuto sin uso (ocupa memoria).
+// Antes de leer, la página se prepara (imagen/lectura.js): papel parejo, más
+// contraste y nitidez. Así lee también la letra chica de un libro.
+
+import { abrirFoto, aImageData, soltarCanvas } from './fotos.js';
+import { paraLeer } from './motor.js';
 
 const BASE = new URL('../vendor/tesseract/', import.meta.url).href;
 
@@ -55,6 +60,18 @@ function cerrarLuego() {
   }, 60000);
 }
 
+/** La página lista para leer, en un canvas */
+async function prepararImagen(blob) {
+  const foto = await abrirFoto(blob);
+  const img = aImageData(foto);
+  foto.close?.();
+  const lista = await paraLeer(img);
+  const lienzo = document.createElement('canvas');
+  lienzo.width = lista.width; lienzo.height = lista.height;
+  lienzo.getContext('2d').putImageData(lista, 0, 0);
+  return lienzo;
+}
+
 /**
  * Lee el texto de una imagen (Blob).
  * @param alAvanzar ({ etapa, progreso }) con etapa 'preparando' | 'leyendo' y progreso 0..1
@@ -66,25 +83,41 @@ export async function leerTexto(imagen, { idioma = 'spa', alAvanzar } = {}) {
   avance = m => alAvanzar?.({ etapa: m.status === 'recognizing text' ? 'leyendo' : 'preparando', progreso: m.progress || 0 });
   try {
     const t = await obtenerTrabajador(idioma);
-    const { data } = await t.recognize(imagen, {}, { text: true, blocks: true });
-    return resultado(data, idioma);
+    const lienzo = await prepararImagen(imagen);
+    try {
+      const { data } = await t.recognize(lienzo, {}, { blocks: true });
+      return resultado(data, idioma);
+    } finally {
+      soltarCanvas(lienzo);
+    }
   } finally {
     avance = null;
     cerrarLuego();
   }
 }
 
-function resultado(data, idioma) {
-  const lineas = [];
-  for (const bloque of data.blocks || []) for (const parrafo of bloque.paragraphs) for (const linea of parrafo.lines) {
-    const palabras = linea.words
-      .filter(p => p.text.trim())
-      .map(p => ({ t: p.text.trim(), x0: p.bbox.x0, y0: p.bbox.y0, x1: p.bbox.x1, y1: p.bbox.y1 }));
-    if (!palabras.length) continue;
-    const b = linea.baseline;
-    lineas.push({ y0: linea.bbox.y0, y1: linea.bbox.y1, base: b ? [b.x0, b.y0, b.x1, b.y1] : null, palabras });
+/**
+ * El lector también "lee" rayas, bordes y dibujos: lo que no tiene ni una
+ * letra ni un número no es texto. (Quitar además lo de poca confianza borraba
+ * muchas palabras buenas: en 10 páginas reales, 4 de cada 10.)
+ */
+export const esTexto = t => /[\p{L}\p{N}]/u.test(t);
+
+/** Texto y renglones, con las posiciones en píxeles de la página */
+export function resultado(data, idioma) {
+  const lineas = [], parrafos = [];
+  for (const bloque of data.blocks || []) for (const parrafo of bloque.paragraphs) {
+    const renglones = [];
+    for (const linea of parrafo.lines) {
+      const palabras = linea.words
+        .filter(p => esTexto(p.text))
+        .map(p => ({ t: p.text.trim(), x0: p.bbox.x0, y0: p.bbox.y0, x1: p.bbox.x1, y1: p.bbox.y1 }));
+      if (!palabras.length) continue;
+      const b = linea.baseline;
+      lineas.push({ y0: linea.bbox.y0, y1: linea.bbox.y1, base: b ? [b.x0, b.y0, b.x1, b.y1] : null, palabras });
+      renglones.push(palabras.map(p => p.t).join(' '));
+    }
+    if (renglones.length) parrafos.push(renglones.join('\n'));
   }
-  // Sin renglones vacíos repetidos ni espacios al final
-  const texto = (data.text || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-  return { idioma, texto, lineas };
+  return { idioma, texto: parrafos.join('\n\n'), lineas };
 }

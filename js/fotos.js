@@ -60,14 +60,16 @@ export async function imageDataABlob(imagen, tipo, calidad) {
 
 /**
  * Foto lista para guardar: orientada, sin pasar de `maxLado` y en JPEG.
+ * 4000 px es la foto completa de la mayoría de los teléfonos (12 MP): la letra
+ * chica de un libro necesita todo ese detalle para que el OCR la lea.
  * Devuelve { blob, ancho, alto, canvas, anchoOriginal, altoOriginal }
  * (el canvas sirve para seguir trabajando sin volver a abrirla).
  */
-export async function normalizarFoto(archivo, maxLado = 2800) {
+export async function normalizarFoto(archivo, maxLado = 4000) {
   const bitmap = await abrirFoto(archivo);
   const anchoOriginal = anchoDe(bitmap), altoOriginal = altoDe(bitmap);
   const c = aCanvas(bitmap, maxLado);
   bitmap.close?.();
-  const blob = await canvasABlob(c, 'image/jpeg', 0.92);
+  const blob = await canvasABlob(c, 'image/jpeg', 0.9);
   return { blob, ancho: c.width, alto: c.height, canvas: c, anchoOriginal, altoOriginal };
 }

@@ -34,6 +34,7 @@ async function pedir(mensaje, transferir) {
     directo = directo || await import('./imagen/procesar.js');
     if (mensaje.tipo === 'detectar') return directo.detectarHoja(mensaje.imagen);
     if (mensaje.tipo === 'nitidez') return mensaje.opciones?.esquinas ? directo.nitidezDeHoja(mensaje.imagen, mensaje.opciones.esquinas) : directo.medirNitidez(mensaje.imagen);
+    if (mensaje.tipo === 'lectura') return directo.prepararParaLeer(mensaje.imagen);
     return directo.procesarPagina(mensaje.imagen, mensaje.opciones);
   }
   const id = siguiente++;
@@ -66,4 +67,16 @@ export async function procesar(imagen, opciones) {
  */
 export function nitidez(imagen, esquinas) {
   return pedir({ tipo: 'nitidez', imagen: { data: imagen.data, width: imagen.width, height: imagen.height }, opciones: esquinas ? { esquinas } : null });
+}
+
+/**
+ * La página lista para el lector de texto: en gris, pareja y con nitidez.
+ * `imagen` (ImageData) se entrega al worker: no se puede volver a usar.
+ */
+export async function paraLeer(imagen) {
+  const r = await pedir(
+    { tipo: 'lectura', imagen: { data: imagen.data, width: imagen.width, height: imagen.height } },
+    [imagen.data.buffer]
+  );
+  return new ImageData(new Uint8ClampedArray(r.data.buffer, r.data.byteOffset, r.data.length), r.width, r.height);
 }

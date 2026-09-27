@@ -1,7 +1,7 @@
 // ScanLibre · imagen/worker.js
 // Hace las cuentas pesadas fuera de la página para que la app no se trabe.
 
-import { detectarHoja, procesarPagina, nitidezDeHoja, medirNitidez } from './procesar.js';
+import { detectarHoja, procesarPagina, nitidezDeHoja, medirNitidez, prepararParaLeer } from './procesar.js';
 
 self.onmessage = e => {
   const { id, tipo, imagen, opciones } = e.data;
@@ -11,6 +11,9 @@ self.onmessage = e => {
       self.postMessage({ id, resultado: detectarHoja(imagen) });
     } else if (tipo === 'procesar') {
       const r = procesarPagina(imagen, opciones);
+      self.postMessage({ id, resultado: r }, [r.data.buffer]);
+    } else if (tipo === 'lectura') {
+      const r = prepararParaLeer(imagen);
       self.postMessage({ id, resultado: r }, [r.data.buffer]);
     } else if (tipo === 'nitidez') {
       self.postMessage({ id, resultado: opciones?.esquinas ? nitidezDeHoja(imagen, opciones.esquinas) : medirNitidez(imagen) });

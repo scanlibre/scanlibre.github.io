@@ -7,8 +7,9 @@ import { enderezar, rotar90 } from './perspectiva.js';
 import { aplicarFiltro } from './filtros.js';
 import { tamanoEnderezado } from './geometria.js';
 import { medirNitidez } from './nitidez.js';
+import { prepararParaLeer } from './lectura.js';
 
-export { detectarHoja, medirNitidez };
+export { detectarHoja, medirNitidez, prepararParaLeer };
 
 /**
  * @param imagen   foto completa {data, width, height}
