@@ -73,7 +73,7 @@ export async function reprocesar(pagina, cambios) {
 
 /** Qué versión de la página es: si cambia (filtro, recorte, giro), el texto leído deja de servir */
 // LECTOR sube cuando cambia cómo se lee (así los textos viejos se vuelven a leer)
-const LECTOR = 2;
+const LECTOR = 3;
 const versionDe = p => `l${LECTOR}|${p.filtro}|${p.rotacion}|${p.procAncho}x${p.procAlto}|${JSON.stringify(p.esquinas)}`;
 
 /**

@@ -34,18 +34,33 @@ describe('Página lista para el lector de texto', () => {
 });
 
 describe('Texto que devuelve el lector', () => {
+  // El lector usa el navegador solo al leer: resultado() se prueba aquí
+  const palabra = (text, confidence = 95) => ({ text, confidence, bbox: { x0: 0, y0: 0, x1: 10, y1: 8 } });
+  const linea = (words, confidence = 90) => ({ bbox: { y0: 0, y1: 8 }, baseline: null, confidence, words });
+  const leer = async parrafos => (await import('../js/ocr.js')).resultado({ blocks: [{ paragraphs: parrafos.map(lines => ({ lines })) }] }, 'spa');
+
   it('quita las rayas y bordes que "lee" como texto, y respeta renglones y párrafos', async () => {
-    // El lector usa el navegador solo al leer: resultado() se prueba aquí
-    const { resultado } = await import('../js/ocr.js');
-    const palabra = (text, x0) => ({ text, confidence: 90, bbox: { x0, y0: 0, x1: x0 + 10, y1: 8 } });
-    const linea = (...ws) => ({ bbox: { y0: 0, y1: 8 }, baseline: null, words: ws });
-    const data = { blocks: [{ paragraphs: [
-      { lines: [linea(palabra('Hola', 0), palabra('|', 12), palabra('mundo', 20)), linea(palabra('—', 0), palabra('==', 5))] },
-      { lines: [linea(palabra('1821.', 0))] }
-    ] }] };
-    const r = resultado(data, 'spa');
+    const r = await leer([
+      [linea([palabra('Hola'), palabra('|'), palabra('mundo')]), linea([palabra('—'), palabra('==')])],
+      [linea([palabra('1821.')])]
+    ]);
     assert.equal(r.texto, 'Hola mundo\n\n1821.');
     assert.equal(r.lineas.length, 2, 'el renglón de puras rayas no queda');
     assert.deepEqual(r.lineas[0].palabras.map(p => p.t), ['Hola', 'mundo']);
+  });
+
+  it('quita la basura de poca confianza: renglones enteros y pedacitos en las puntas', async () => {
+    const r = await leer([[
+      linea([palabra('Etapas'), palabra('del'), palabra('procedimiento'), palabra('E', 20), palabra('|', 60)]),
+      linea([palabra('L-', 0), palabra('aa', 34), palabra('do', 64)], 21),        // renglón basura
+      linea([palabra('Rano', 14), palabra('competente'), palabra('tributarios', 19), palabra('Ses', 20)])
+    ]]);
+    assert.equal(r.texto, 'Etapas del procedimiento\ncompetente tributarios');
+  });
+
+  it('une la palabra cortada con guion al final del renglón', async () => {
+    const r = await leer([[linea([palabra('las'), palabra('instalacio-')]), linea([palabra('nes'), palabra('o'), palabra('domicilio;')]), linea([palabra('Ad-')]), linea([palabra('Aduanera')])]]);
+    assert.equal(r.texto, 'las instalaciones o domicilio;\nAd-\nAduanera');
+    assert.equal(r.lineas.length, 4, 'en el PDF cada palabra sigue en su lugar');
   });
 });

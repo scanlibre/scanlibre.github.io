@@ -97,27 +97,52 @@ export async function leerTexto(imagen, { idioma = 'spa', alAvanzar } = {}) {
 }
 
 /**
- * El lector también "lee" rayas, bordes y dibujos: lo que no tiene ni una
- * letra ni un número no es texto. (Quitar además lo de poca confianza borraba
- * muchas palabras buenas: en 10 páginas reales, 4 de cada 10.)
+ * El lector también "lee" rayas, bordes, dibujos y renglones doblados (en la
+ * curva de un libro). Esa basura se reconoce por su poca confianza: en seis
+ * páginas reales, las palabras de verdad tenían confianza 95 (mediana) y la
+ * basura 53. Con estas reglas se va un tercio de la basura y se queda el 95 %
+ * de las palabras de verdad (quitar todo lo de poca confianza borraba 4 de
+ * cada 10 palabras buenas).
  */
 export const esTexto = t => /[\p{L}\p{N}]/u.test(t);
+const letras = t => (t.match(/[\p{L}\p{N}]/gu) || []).length;
+/** Una palabra "bien armada" (letras, minúsculas o solo la primera mayúscula): aunque el lector dude, casi siempre es real */
+const bienArmada = t => /^[¿¡("“«]?\p{Lu}?\p{Ll}{4,}[.,;:)?!"”»-]?$/u.test(t);
+const confianza = x => x.confidence ?? 100;
 
-/** Texto y renglones, con las posiciones en píxeles de la página */
+function palabrasConfiables(linea) {
+  const ws = linea.words.filter(p => esTexto(p.text) && (confianza(p) >= 25 || (confianza(p) >= 10 && bienArmada(p.text.trim()))));
+  // Pedacitos dudosos en las puntas del renglón (ahí es donde el renglón se dobla o llega el borde)
+  while (ws.length && letras(ws.at(-1).text) <= 3 && confianza(ws.at(-1)) < 75) ws.pop();
+  while (ws.length && letras(ws[0].text) <= 2 && confianza(ws[0]) < 50) ws.shift();
+  return ws;
+}
+
+/** Une los renglones de un párrafo; "instalacio-" + "nes" queda "instalaciones" */
+function unirRenglones(renglones) {
+  let texto = '';
+  for (const r of renglones) {
+    if (/\p{L}[-‐]$/u.test(texto) && /^\p{Ll}/u.test(r)) texto = texto.slice(0, -1) + r;
+    else texto += (texto ? '\n' : '') + r;
+  }
+  return texto;
+}
+
+/** Texto y renglones sin la basura, con las posiciones en píxeles de la página */
 export function resultado(data, idioma) {
   const lineas = [], parrafos = [];
   for (const bloque of data.blocks || []) for (const parrafo of bloque.paragraphs) {
     const renglones = [];
     for (const linea of parrafo.lines) {
-      const palabras = linea.words
-        .filter(p => esTexto(p.text))
+      if (confianza(linea) < 30) continue; // renglón casi todo basura
+      const palabras = palabrasConfiables(linea)
         .map(p => ({ t: p.text.trim(), x0: p.bbox.x0, y0: p.bbox.y0, x1: p.bbox.x1, y1: p.bbox.y1 }));
       if (!palabras.length) continue;
       const b = linea.baseline;
       lineas.push({ y0: linea.bbox.y0, y1: linea.bbox.y1, base: b ? [b.x0, b.y0, b.x1, b.y1] : null, palabras });
       renglones.push(palabras.map(p => p.t).join(' '));
     }
-    if (renglones.length) parrafos.push(renglones.join('\n'));
+    if (renglones.length) parrafos.push(unirRenglones(renglones));
   }
   return { idioma, texto: parrafos.join('\n\n'), lineas };
 }
