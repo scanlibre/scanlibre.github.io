@@ -82,8 +82,9 @@ export function leerBase(page) {
     const todo = nombre => new Promise(r => { const q = db.transaction(nombre).objectStore(nombre).getAll(); q.onsuccess = () => r(q.result); });
     const documentos = await todo('documentos');
     const paginas = (await todo('paginas')).map(p => ({ ...p, original: p.original.size, procesada: p.procesada.size, tipo: p.procesada.type, miniatura: p.miniatura.size }));
+    const carpetas = db.objectStoreNames.contains('carpetas') ? await todo('carpetas') : [];
     db.close();
-    return { documentos, paginas };
+    return { documentos, paginas, carpetas };
   });
 }
 

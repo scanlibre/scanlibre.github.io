@@ -157,6 +157,22 @@ img { display: block; }
 .chip[aria-pressed="true"] { background: var(--marca); color: var(--marca-texto); border-color: transparent; }
 
 /* ── Inicio ─────────────────────────────────────────────────────── */
+/* Carpetas: una fila que se desliza de lado */
+.carpetas {
+  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+  padding: 2px 16px 10px; flex: none;
+}
+.carpetas::-webkit-scrollbar { display: none; }
+.carpeta-chip {
+  flex: none; display: inline-flex; align-items: center; gap: 4px;
+  min-height: 38px; padding: 0 14px; border: 1px solid var(--borde); border-radius: 999px;
+  background: var(--superficie); color: var(--texto); font: inherit; font-weight: 600; font-size: 0.92rem; cursor: pointer;
+  max-width: 70vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.carpeta-chip .icono { width: 18px; height: 18px; flex: none; }
+.carpeta-chip[aria-pressed="true"] { background: var(--marca-suave); color: var(--marca-fuerte); border-color: transparent; }
+.carpeta-nueva { color: var(--marca-fuerte); border-style: dashed; }
+.carpeta-vacia { text-align: center; color: var(--texto-2); padding: 32px 16px; margin: 0; }
 .vacio { text-align: center; padding: 48px 16px 24px; max-width: 420px; margin: 0 auto; }
 .vacio h2 { font-size: 1.3rem; line-height: 1.25; margin: 20px 0 8px; }
 .vacio p { color: var(--texto-2); margin: 0; }

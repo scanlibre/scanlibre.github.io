@@ -1,8 +1,9 @@
 // ScanLibre · vistas/inicio.js
 // La lista de documentos, el botón de escanear y el menú de respaldo.
 
-import { $, el, fechaCorta, paginasTexto, aviso, menu, hoja, tamanoLegible } from '../util.js';
-import { listarDocumentos, obtenerPagina } from '../db.js';
+import { $, el, icono, fechaCorta, paginasTexto, aviso, menu, hoja, confirmar, pedirTexto, tamanoLegible, nuevoId } from '../util.js';
+import { listarDocumentos, obtenerPagina, listarCarpetas, guardarCarpeta, borrarCarpeta } from '../db.js';
+import { ajustes, cambiarAjuste } from '../ajustes.js';
 import { ir } from '../rutas.js';
 import { nuevaSesion, diagnosticoCamara } from './camara.js';
 import { VERSION } from '../version.js';
@@ -15,10 +16,16 @@ let urls = [];
 const soltarUrls = () => { urls.forEach(u => URL.revokeObjectURL(u)); urls = []; };
 
 export async function mostrar() {
-  const docs = await listarDocumentos();
+  const [docs, carpetas] = await Promise.all([listarDocumentos(), listarCarpetas()]);
+  // La carpeta elegida (si se borró en otra pestaña, se vuelve a "Todos")
+  const elegida = carpetas.find(c => c.id === ajustes().carpeta) || null;
+  if (!elegida && ajustes().carpeta) cambiarAjuste('carpeta', null);
+  pintarCarpetas(carpetas, elegida);
+  const nombreDe = new Map(carpetas.map(c => [c.id, c.nombre]));
+  const visibles = elegida ? docs.filter(d => d.carpetaId === elegida.id) : docs;
   soltarUrls();
   const lista = $('#inicio-lista');
-  const items = await Promise.all(docs.map(async doc => {
+  const items = await Promise.all(visibles.map(async doc => {
     const primera = doc.paginas.length ? await obtenerPagina(doc.paginas[0]) : null;
     let img;
     if (primera?.miniatura) {
@@ -33,10 +40,63 @@ export async function mostrar() {
         img,
         el('span', { class: 'doc-texto' },
           el('div', { class: 'doc-nombre', text: doc.nombre }),
-          el('div', { class: 'doc-detalle', text: `${paginasTexto(doc.paginas.length)} · ${fechaCorta(doc.modificado)}` }))));
+          el('div', { class: 'doc-detalle', text: [!elegida && nombreDe.get(doc.carpetaId), paginasTexto(doc.paginas.length), fechaCorta(doc.modificado)].filter(Boolean).join(' · ') }))));
   }));
   lista.replaceChildren(...items);
-  $('#inicio-vacio').hidden = docs.length > 0;
+  $('#inicio-vacio').hidden = docs.length > 0 || !!elegida;
+  const vacia = $('#inicio-carpeta-vacia');
+  vacia.hidden = !elegida || visibles.length > 0;
+  if (elegida) vacia.textContent = `Todavía no hay documentos en «${elegida.nombre}». Lo que escanees ahora se guarda aquí.`;
+}
+
+// ── Carpetas ────────────────────────────────────────────────────────
+function pintarCarpetas(carpetas, elegida) {
+  const chip = (contenido, activa, onclick, etiqueta) =>
+    el('button', { class: 'carpeta-chip', 'aria-pressed': String(activa), 'aria-label': etiqueta, onclick }, ...[contenido].flat());
+  $('#inicio-carpetas').replaceChildren(
+    chip('Todos', !elegida, () => elegir(null)),
+    ...carpetas.map(c => c === elegida
+      // La carpeta elegida: tocarla otra vez abre sus opciones
+      ? chip([c.nombre, icono('menu')], true, () => opcionesDe(c), `${c.nombre}: opciones de la carpeta`)
+      : chip(c.nombre, false, () => elegir(c.id))),
+    el('button', { class: 'carpeta-chip carpeta-nueva', onclick: nuevaCarpeta }, icono('mas'), 'Carpeta'));
+  // La fila se desliza solo lo necesario para que se vea entera la carpeta elegida
+  const fila = $('#inicio-carpetas'), sel = fila.querySelector('[aria-pressed="true"]');
+  const derecha = sel.getBoundingClientRect().right - fila.getBoundingClientRect().left + fila.scrollLeft;
+  fila.scrollLeft = Math.max(0, derecha + 16 - fila.clientWidth);
+}
+
+function elegir(id) {
+  cambiarAjuste('carpeta', id);
+  mostrar();
+}
+
+async function nuevaCarpeta() {
+  const nombre = await pedirTexto('Nueva carpeta', '', { aceptar: 'Crear', ejemplo: 'Por ejemplo: Cálculo' });
+  if (!nombre) return;
+  const existente = (await listarCarpetas()).find(c => c.nombre.localeCompare(nombre, 'es', { sensitivity: 'base' }) === 0);
+  const carpeta = existente || await guardarCarpeta({ id: nuevoId(), nombre, creada: Date.now() });
+  if (!existente) aviso(`Lo que escanees ahora se guarda en «${nombre}».`, 'exito');
+  elegir(carpeta.id);
+}
+
+async function opcionesDe(carpeta) {
+  const opcion = await menu([
+    { valor: 'renombrar', texto: 'Cambiar el nombre', icono: 'editar' },
+    { valor: 'borrar', texto: 'Eliminar la carpeta', icono: 'basura', peligro: true }
+  ], carpeta.nombre);
+  if (opcion === 'renombrar') {
+    const nombre = await pedirTexto('Nombre de la carpeta', carpeta.nombre);
+    if (!nombre || nombre === carpeta.nombre) return;
+    await guardarCarpeta({ ...carpeta, nombre });
+    mostrar();
+  } else if (opcion === 'borrar') {
+    const si = await confirmar(`¿Eliminar la carpeta «${carpeta.nombre}»?`, { detalle: 'Sus documentos no se borran: quedan en "Todos".', aceptar: 'Eliminar', peligro: true });
+    if (!si) return;
+    await borrarCarpeta(carpeta.id);
+    aviso('Carpeta eliminada. Sus documentos siguen en "Todos".');
+    elegir(null);
+  }
 }
 
 export function ocultar() { soltarUrls(); }

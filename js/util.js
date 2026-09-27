@@ -51,6 +51,11 @@ export function nombrePorDefecto(d = new Date()) {
   return `Escaneo ${d.getDate()} ${mes} ${d.getFullYear()} ${p(d.getHours())}.${p(d.getMinutes())}`;
 }
 
+/** "27 sept": para el nombre de los documentos de una carpeta */
+export function fechaDeClase(d = new Date()) {
+  return `${d.getDate()} ${new Intl.DateTimeFormat('es-HN', { month: 'short' }).format(d).replace('.', '')}`;
+}
+
 export function tamanoLegible(bytes) {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
@@ -106,9 +111,9 @@ export function confirmar(titulo, { detalle = '', aceptar = 'Aceptar', peligro =
   ]).then(v => v === true);
 }
 
-export function pedirTexto(titulo, valor = '', { aceptar = 'Guardar' } = {}) {
+export function pedirTexto(titulo, valor = '', { aceptar = 'Guardar', ejemplo } = {}) {
   return hoja(cerrar => {
-    const entrada = el('input', { class: 'campo', type: 'text', value: valor, maxlength: 120, 'aria-label': titulo, enterkeyhint: 'done' });
+    const entrada = el('input', { class: 'campo', type: 'text', value: valor, maxlength: 120, 'aria-label': titulo, placeholder: ejemplo, enterkeyhint: 'done' });
     const listo = () => { const v = entrada.value.trim(); if (v) cerrar(v); };
     entrada.addEventListener('keydown', e => { if (e.key === 'Enter') listo(); });
     setTimeout(() => { entrada.focus(); entrada.select(); }, 50);

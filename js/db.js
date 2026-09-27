@@ -1,10 +1,12 @@
 // ScanLibre · db.js
 // Los documentos y sus páginas viven en IndexedDB, dentro del teléfono.
-//  documentos: { id, nombre, creado, modificado, paginas: [idPagina, ...] }
+//  carpetas:   { id, nombre, creada }
+//  documentos: { id, nombre, creado, modificado, paginas: [idPagina, ...], carpetaId }
 //  paginas:    { id, docId, original, ancho, alto, esquinas, filtro, rotacion,
 //                procesada, procAncho, procAlto, miniatura }  (original/procesada/miniatura son Blob)
 
-const NOMBRE = 'scanlibre', VERSION = 1;
+// Versión 2: se agregaron las carpetas (los documentos de antes quedan sin carpeta)
+const NOMBRE = 'scanlibre', VERSION = 2;
 let conexion = null;
 
 function abrir() {
@@ -15,8 +17,14 @@ function abrir() {
       const db = pedido.result;
       if (!db.objectStoreNames.contains('documentos')) db.createObjectStore('documentos', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('paginas')) db.createObjectStore('paginas', { keyPath: 'id' }).createIndex('docId', 'docId');
+      if (!db.objectStoreNames.contains('carpetas')) db.createObjectStore('carpetas', { keyPath: 'id' });
     };
-    pedido.onsuccess = () => resolver(pedido.result);
+    pedido.onsuccess = () => {
+      const db = pedido.result;
+      // Si otra pestaña abre una versión nueva de la app, esta suelta la base para que se pueda actualizar
+      db.onversionchange = () => { db.close(); conexion = null; };
+      resolver(db);
+    };
     pedido.onerror = () => { conexion = null; rechazar(pedido.error); };
   });
   return conexion;
@@ -134,6 +142,32 @@ export async function reemplazarDocumento(doc, paginas) {
       for (const k of e.target.result) pags.delete(k);
       for (const p of paginas) pags.put({ ...p, docId: doc.id });
       tx.objectStore('documentos').put({ ...doc, paginas: paginas.map(p => p.id) });
+    };
+    tx.oncomplete = () => resolver();
+    tx.onerror = () => rechazar(tx.error);
+  });
+}
+
+// ── Carpetas ────────────────────────────────────────────────────────
+export async function listarCarpetas() {
+  const cs = await hecho((await tienda('carpetas')).getAll());
+  return cs.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+}
+
+export async function guardarCarpeta(carpeta) {
+  await hecho((await tienda('carpetas', 'readwrite')).put(carpeta));
+  return carpeta;
+}
+
+/** Borra la carpeta; sus documentos no se borran: quedan sin carpeta */
+export async function borrarCarpeta(id) {
+  const db = await abrir();
+  return new Promise((resolver, rechazar) => {
+    const tx = db.transaction(['carpetas', 'documentos'], 'readwrite');
+    const docs = tx.objectStore('documentos');
+    docs.getAll().onsuccess = e => {
+      for (const d of e.target.result) if (d.carpetaId === id) docs.put({ ...d, carpetaId: null });
+      tx.objectStore('carpetas').delete(id);
     };
     tx.oncomplete = () => resolver();
     tx.onerror = () => rechazar(tx.error);

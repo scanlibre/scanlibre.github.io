@@ -6,8 +6,8 @@
 import { detectar, procesar, nitidez as medir } from './motor.js';
 import { UMBRAL_BORROSA } from './imagen/nitidez.js';
 import { abrirFoto, aCanvas, aImageData, canvasABlob, imageDataABlob, normalizarFoto, soltarCanvas } from './fotos.js';
-import { agregarPagina, guardarDocumento, guardarPagina, obtenerDocumento, obtenerPagina } from './db.js';
-import { nuevoId, nombrePorDefecto } from './util.js';
+import { agregarPagina, guardarDocumento, guardarPagina, obtenerDocumento, obtenerPagina, listarCarpetas, listarDocumentos } from './db.js';
+import { nuevoId, nombrePorDefecto, fechaDeClase } from './util.js';
 import { ajustes } from './ajustes.js';
 
 export const TODA_LA_FOTO = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }];
@@ -94,9 +94,21 @@ export async function textoDePagina(pagina, { idioma = 'spa', alAvanzar } = {}) 
   return ocr;
 }
 
-export async function nuevoDocumento() {
+/**
+ * Documento nuevo. Si hay una carpeta elegida en el inicio, va en ella y se
+ * llama como la clase y la fecha: «Cálculo – 27 sept» (o «… (2)» si ya hay uno).
+ */
+export async function nuevoDocumento(carpetaId = ajustes().carpeta) {
   const ahora = Date.now();
-  return guardarDocumento({ id: nuevoId(), nombre: nombrePorDefecto(), creado: ahora, modificado: ahora, paginas: [] });
+  const carpeta = carpetaId ? (await listarCarpetas()).find(c => c.id === carpetaId) : null;
+  let nombre = nombrePorDefecto();
+  if (carpeta) {
+    const base = `${carpeta.nombre} – ${fechaDeClase()}`;
+    const usados = new Set((await listarDocumentos()).map(d => d.nombre));
+    nombre = base;
+    for (let i = 2; usados.has(nombre); i++) nombre = `${base} (${i})`;
+  }
+  return guardarDocumento({ id: nuevoId(), nombre, creado: ahora, modificado: ahora, paginas: [], carpetaId: carpeta?.id || null });
 }
 
 // ── Cola de fotos ───────────────────────────────────────────────────

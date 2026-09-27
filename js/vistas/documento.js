@@ -1,8 +1,8 @@
 // ScanLibre · vistas/documento.js
 // Las páginas de un documento, agregar más, renombrar y crear el PDF.
 
-import { $, el, icono, aviso, confirmar, pedirTexto, menu, hoja, paginasTexto, fechaCorta, tamanoLegible, nombreArchivo } from '../util.js';
-import { obtenerDocumento, guardarDocumento, paginasDe, borrarDocumento } from '../db.js';
+import { $, el, icono, aviso, confirmar, pedirTexto, menu, hoja, paginasTexto, fechaCorta, tamanoLegible, nombreArchivo, nuevoId } from '../util.js';
+import { obtenerDocumento, guardarDocumento, paginasDe, borrarDocumento, listarCarpetas, guardarCarpeta } from '../db.js';
 import { ir, volver } from '../rutas.js';
 import { eventosPaginas, pendientesEnCola, importarArchivos, textoDePagina, esBorrosa } from '../paginas.js';
 import { mostrarTexto } from './texto.js';
@@ -25,6 +25,10 @@ export async function mostrar({ doc }) {
 export function ocultar() {
   eventosPaginas.removeEventListener('cambio', alCambiar);
   soltarUrls();
+  // Así, al abrir otro documento, no se alcanzan a ver las páginas de este
+  $('#doc-paginas').replaceChildren();
+  $('#doc-nombre').textContent = '';
+  $('#doc-estado').textContent = '';
 }
 
 function alCambiar(e) {
@@ -57,7 +61,8 @@ async function pintar() {
   items.push(el('li', {},
     el('button', { class: 'miniatura miniatura-agregar', onclick: agregar }, icono('mas'), 'Agregar página')));
   $('#doc-paginas').replaceChildren(...items);
-  let estado = `${paginasTexto(paginas.length)} · ${fechaCorta(doc.modificado)}`;
+  const carpeta = doc.carpetaId && (await listarCarpetas()).find(c => c.id === doc.carpetaId);
+  let estado = [carpeta?.nombre, paginasTexto(paginas.length), fechaCorta(doc.modificado)].filter(Boolean).join(' · ');
   if (pendientes) estado += ` · procesando ${pendientes === 1 ? '1 foto' : pendientes + ' fotos'}…`;
   $('#doc-estado').textContent = estado;
   $('#doc-pdf').disabled = paginas.length === 0 || pendientes > 0;
@@ -77,6 +82,28 @@ async function agregar() {
   }
 }
 
+async function moverACarpeta() {
+  const [doc, carpetas] = await Promise.all([obtenerDocumento(docId), listarCarpetas()]);
+  const opcion = await menu([
+    ...carpetas.map(c => ({ valor: c.id, texto: c.id === doc.carpetaId ? `${c.nombre} (está aquí)` : c.nombre, icono: 'carpeta' })),
+    doc.carpetaId && { valor: 'ninguna', texto: 'Sacar de la carpeta', icono: 'cerrar' },
+    { valor: 'nueva', texto: 'Nueva carpeta…', icono: 'mas' }
+  ].filter(Boolean), 'Mover a una carpeta');
+  if (!opcion) return;
+  let destino = carpetas.find(c => c.id === opcion) || null;
+  if (opcion === 'nueva') {
+    const nombre = await pedirTexto('Nueva carpeta', '', { aceptar: 'Crear', ejemplo: 'Por ejemplo: Cálculo' });
+    if (!nombre) return;
+    destino = carpetas.find(c => c.nombre.localeCompare(nombre, 'es', { sensitivity: 'base' }) === 0)
+      || await guardarCarpeta({ id: nuevoId(), nombre, creada: Date.now() });
+  }
+  if ((destino?.id || null) === (doc.carpetaId || null)) return;
+  doc.carpetaId = destino?.id || null;
+  await guardarDocumento(doc);
+  aviso(destino ? `Movido a «${destino.nombre}».` : 'Quedó sin carpeta.', 'exito');
+  pintar();
+}
+
 async function renombrar() {
   const doc = await obtenerDocumento(docId);
   const nombre = await pedirTexto('Nombre del documento', doc.nombre);
@@ -91,8 +118,10 @@ async function masOpciones() {
   const opcion = await menu([
     { valor: 'texto', texto: 'Copiar el texto de todo el documento', icono: 'texto' },
     { valor: 'renombrar', texto: 'Cambiar el nombre', icono: 'editar' },
+    { valor: 'mover', texto: 'Mover a una carpeta', icono: 'carpeta' },
     { valor: 'borrar', texto: 'Eliminar el documento', icono: 'basura', peligro: true }
   ]);
+  if (opcion === 'mover') return moverACarpeta();
   if (opcion === 'texto') {
     const paginas = await paginasDe(await obtenerDocumento(docId));
     if (!paginas.length) return aviso('El documento todavía no tiene páginas.');

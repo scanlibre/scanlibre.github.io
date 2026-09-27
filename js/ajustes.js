@@ -9,7 +9,8 @@ const FABRICA = {
   pdfTamano: 'carta',
   pdfCalidad: 'normal',
   pdfTexto: false,        // PDF con el texto leído (se puede buscar y copiar)
-  ocrIdioma: 'spa'
+  ocrIdioma: 'spa',
+  carpeta: null           // carpeta elegida en el inicio: lo que se escanea se guarda ahí
 };
 
 let actuales = null;

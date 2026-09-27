@@ -1,9 +1,10 @@
 // ScanLibre · respaldo.js
 // Respaldo gratis: todos los documentos en un solo archivo .zip que se guarda
 // donde uno quiera (Drive, correo, la PC) y se restaura en otro teléfono.
-// Adentro: scanlibre-respaldo.json con los datos y las fotos de cada página.
+// Adentro: scanlibre-respaldo.json con los datos (carpetas, documentos y
+// páginas) y las fotos de cada página.
 
-import { listarDocumentos, paginasDe, reemplazarDocumento } from './db.js';
+import { listarDocumentos, paginasDe, reemplazarDocumento, listarCarpetas, guardarCarpeta } from './db.js';
 import { abrirFoto, aCanvas, canvasABlob } from './fotos.js';
 
 const MANIFIESTO = 'scanlibre-respaldo.json';
@@ -105,11 +106,11 @@ const extension = blob => blob.type === 'image/png' ? 'png' : 'jpg';
 export async function crearRespaldo() {
   const docs = await listarDocumentos();
   const archivos = [];
-  const manifiesto = { app: 'ScanLibre', version: 1, creado: Date.now(), documentos: [] };
+  const manifiesto = { app: 'ScanLibre', version: 1, creado: Date.now(), carpetas: await listarCarpetas(), documentos: [] };
   for (const doc of docs) {
     const paginas = await paginasDe(doc);
     manifiesto.documentos.push({
-      id: doc.id, nombre: doc.nombre, creado: doc.creado, modificado: doc.modificado,
+      id: doc.id, nombre: doc.nombre, creado: doc.creado, modificado: doc.modificado, carpetaId: doc.carpetaId || null,
       paginas: paginas.map(p => {
         const original = `paginas/${p.id}-original.${extension(p.original)}`;
         const procesada = `paginas/${p.id}-pagina.${extension(p.procesada)}`;
@@ -136,6 +137,9 @@ export async function restaurarRespaldo(archivo) {
   const tipoDe = nombre => nombre.endsWith('.png') ? 'image/png' : 'image/jpeg';
   const conTipo = (blob, nombre) => blob.slice(0, blob.size, tipoDe(nombre));
   let restaurados = 0;
+  // Respaldos de antes de las carpetas no traen "carpetas"
+  for (const c of manifiesto.carpetas || []) if (c?.id && c.nombre) await guardarCarpeta({ id: c.id, nombre: c.nombre, creada: c.creada || Date.now() });
+  const hayCarpeta = new Set((manifiesto.carpetas || []).map(c => c?.id));
   for (const d of manifiesto.documentos) {
     const paginas = [];
     for (const p of d.paginas) {
@@ -151,7 +155,7 @@ export async function restaurarRespaldo(archivo) {
         original: conTipo(original, p.original), procesada: conTipo(procesada, p.procesada), miniatura
       });
     }
-    await reemplazarDocumento({ id: d.id, nombre: d.nombre, creado: d.creado, modificado: d.modificado }, paginas);
+    await reemplazarDocumento({ id: d.id, nombre: d.nombre, creado: d.creado, modificado: d.modificado, carpetaId: hayCarpeta.has(d.carpetaId) ? d.carpetaId : null }, paginas);
     restaurados++;
   }
   return restaurados;
