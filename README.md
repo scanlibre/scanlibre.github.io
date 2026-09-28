@@ -25,7 +25,8 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Fotos a resolución completa** (hasta 4000 px, 12 MP): la letra chica conserva el detalle.
 - **Buscar en todos los documentos:** en los nombres y en el texto de cada página, sin importar tildes ni mayúsculas. Muestra la página y el pedazo donde está la palabra; las páginas que faltan se leen con un toque.
 - **Carpetas por clase:** lo que escaneas dentro de una carpeta se guarda ahí y se nombra solo («Cálculo – 27 sept»). Los documentos se pueden mover de carpeta; borrar una carpeta no borra sus documentos.
-- **Documentos de varias páginas:** reordenar, girar, recortar de nuevo y borrar páginas, todo gratis.
+- **Documentos de varias páginas:** reordenar **arrastrando** las miniaturas (con el dedo: mantener presionada y mover), girar, recortar de nuevo y borrar páginas, todo gratis.
+- **Elegir varias páginas** (mantener presionada una sin moverla): girarlas, cambiarles el filtro, pasarlas a un documento nuevo o a otro que ya existe, hacer el PDF solo de esas o eliminarlas de una vez.
 - **PDF** en tamaño carta, A4 o con la forma de la foto, y en tres calidades. La calidad *Liviana* sirve para subir a plataformas con límite de tamaño. Las páginas en B/N van a 1 bit por píxel: nítidas y livianas (unos 50 KB por página).
 - **PDF con contraseña, gratis:** cifrado AES-256 estándar (el que abren Adobe, Chrome y los visores de Android e iPhone). La contraseña no se guarda en ningún lado.
 - **Compartir** directo a WhatsApp, Drive o Classroom, o descargar el PDF.

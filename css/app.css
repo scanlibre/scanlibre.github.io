@@ -356,7 +356,32 @@ mark { background: var(--marca-suave); color: var(--texto); border-radius: 3px; 
   background: #fff; box-shadow: var(--sombra); cursor: pointer;
   aspect-ratio: 0.77;
 }
-.miniatura img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.miniatura img { width: 100%; height: 100%; object-fit: contain; background: #fff; pointer-events: none; -webkit-user-drag: none; transition: transform 0.12s; }
+/* Mantener presionada: se levanta; arrastrar: la página sigue al dedo y deja su hueco */
+.rejilla .miniatura { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.miniatura.levantada { transform: scale(0.95); box-shadow: 0 0 0 3px var(--marca); transition: transform 0.12s; }
+.miniatura-fantasma {
+  position: fixed; z-index: 40; margin: 0; pointer-events: none;
+  transform: scale(1.06) rotate(-2deg); box-shadow: 0 18px 44px rgb(0 0 0 / 0.35); opacity: 0.96;
+}
+.miniatura-hueco .miniatura { opacity: 0.3; outline: 2.5px dashed var(--marca); outline-offset: 2px; }
+/* Elegir varias */
+.miniatura-marca {
+  position: absolute; left: 8px; top: 8px; display: none; place-items: center;
+  width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff;
+  background: rgb(18 32 28 / 0.35); box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+}
+.miniatura-marca .icono { width: 16px; height: 16px; color: #fff; stroke-width: 3; visibility: hidden; }
+.seleccionando .miniatura-marca { display: grid; }
+.miniatura[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--marca); }
+.miniatura[aria-pressed="true"] img { transform: scale(0.9); }
+.miniatura[aria-pressed="true"] .miniatura-marca { background: var(--marca); border-color: var(--marca); }
+.miniatura[aria-pressed="true"] .miniatura-marca .icono { visibility: visible; }
+.seleccionando .miniatura-agregar { display: none; }
+.barra-seleccion { background: var(--marca-suave); }
+.barra-seleccion h1 { color: var(--marca-fuerte); }
+.barra-seleccion .boton-fantasma { color: var(--marca-fuerte); }
+.doc-consejo { margin: 18px 8px 0; text-align: center; font-size: 0.85rem; color: var(--texto-2); }
 .miniatura-numero {
   position: absolute; left: 8px; bottom: 8px;
   min-width: 26px; height: 26px; padding: 0 7px; border-radius: 13px;

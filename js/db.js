@@ -145,6 +145,51 @@ export async function borrarPagina(docId, paginaId) {
   });
 }
 
+/** Borra varias páginas del documento en una sola vez */
+export async function borrarPaginas(docId, ids) {
+  const quitar = new Set(ids);
+  const db = await abrir();
+  return new Promise((resolver, rechazar) => {
+    const tx = db.transaction(['documentos', 'paginas'], 'readwrite');
+    const docs = tx.objectStore('documentos'), pags = tx.objectStore('paginas');
+    docs.get(docId).onsuccess = e => {
+      const doc = e.target.result;
+      if (doc) { doc.paginas = doc.paginas.filter(p => !quitar.has(p)); doc.modificado = Date.now(); docs.put(doc); }
+      for (const id of quitar) pags.delete(id);
+    };
+    tx.oncomplete = () => resolver();
+    tx.onerror = () => rechazar(tx.error);
+  });
+}
+
+/** Pasa páginas de un documento a otro (al final, en el orden en que estaban) */
+export async function moverPaginas(deId, aId, ids) {
+  const mover = new Set(ids);
+  const db = await abrir();
+  return new Promise((resolver, rechazar) => {
+    const tx = db.transaction(['documentos', 'paginas'], 'readwrite');
+    const docs = tx.objectStore('documentos'), pags = tx.objectStore('paginas');
+    docs.get(deId).onsuccess = e => {
+      const de = e.target.result;
+      if (!de) { tx.abort(); return; }
+      const lista = de.paginas.filter(p => mover.has(p));
+      de.paginas = de.paginas.filter(p => !mover.has(p));
+      de.modificado = Date.now();
+      docs.put(de);
+      docs.get(aId).onsuccess = e2 => {
+        const a = e2.target.result;
+        if (!a) { tx.abort(); return; }
+        a.paginas.push(...lista);
+        a.modificado = Date.now();
+        docs.put(a);
+        for (const id of lista) pags.get(id).onsuccess = e3 => { if (e3.target.result) pags.put({ ...e3.target.result, docId: aId }); };
+      };
+    };
+    tx.oncomplete = () => resolver();
+    tx.onabort = tx.onerror = () => rechazar(tx.error || new Error('No se encontró el documento'));
+  });
+}
+
 export async function borrarDocumento(id) {
   const db = await abrir();
   return new Promise((resolver, rechazar) => {
