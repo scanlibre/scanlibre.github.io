@@ -168,3 +168,22 @@ export function curvar({ data, width: w, height: h }, a = 40) {
   }
   return { data: out, width: w, height: h };
 }
+
+/**
+ * Un libro abierto ya enderezado: dos páginas de texto lado a lado y la
+ * sombra del doblez en el lomo (que no queda justo al medio: en `lomo`).
+ */
+export function libroAbierto({ ancho = 1400, alto = 1000, lomo = 0.52, semilla = 4 } = {}) {
+  const xl = Math.round(ancho * lomo);
+  const izq = paginaDeTexto(xl, alto, semilla), der = paginaDeTexto(ancho - xl, alto, semilla + 1);
+  const data = new Uint8ClampedArray(ancho * alto * 4);
+  for (let y = 0; y < alto; y++) for (let x = 0; x < ancho; x++) {
+    const [src, sx, sw] = x < xl ? [izq, x, xl] : [der, x - xl, ancho - xl];
+    const i = (y * ancho + x) * 4, j = (y * sw + sx) * 4;
+    // Sombra del doblez: más oscuro cuanto más cerca del lomo
+    const d = (x - xl) / (ancho * 0.03), luz = 1 - 0.4 * Math.exp(-d * d);
+    for (let c = 0; c < 3; c++) data[i + c] = src.data[j + c] * luz;
+    data[i + 3] = 255;
+  }
+  return { data, width: ancho, height: alto };
+}

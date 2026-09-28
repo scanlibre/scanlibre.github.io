@@ -35,6 +35,7 @@ async function pedir(mensaje, transferir) {
     if (mensaje.tipo === 'detectar') return directo.detectarHoja(mensaje.imagen);
     if (mensaje.tipo === 'nitidez') return mensaje.opciones?.esquinas ? directo.nitidezDeHoja(mensaje.imagen, mensaje.opciones.esquinas) : directo.medirNitidez(mensaje.imagen);
     if (mensaje.tipo === 'lectura') return directo.prepararParaLeer(mensaje.imagen);
+    if (mensaje.tipo === 'libro') return directo.dividirLibro(mensaje.imagen, mensaje.opciones.esquinas);
     return directo.procesarPagina(mensaje.imagen, mensaje.opciones);
   }
   const id = siguiente++;
@@ -80,4 +81,9 @@ export async function paraLeer(imagen) {
     [imagen.data.buffer]
   );
   return new ImageData(new Uint8ClampedArray(r.data.buffer, r.data.byteOffset, r.data.length), r.width, r.height);
+}
+
+/** Libro abierto: [esquinas de la izquierda, de la derecha] o null si no se encuentra el lomo */
+export function dividirLibro(imagen, esquinas) {
+  return pedir({ tipo: 'libro', imagen: { data: imagen.data, width: imagen.width, height: imagen.height }, opciones: { esquinas } }, [imagen.data.buffer]);
 }

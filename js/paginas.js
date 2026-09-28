@@ -3,10 +3,10 @@
 // Las fotos en ráfaga o importadas pasan por una cola, una por una, para no
 // llenar la memoria del teléfono.
 
-import { detectar, procesar, nitidez as medir } from './motor.js';
+import { detectar, procesar, nitidez as medir, dividirLibro } from './motor.js';
 import { UMBRAL_BORROSA } from './imagen/nitidez.js';
 import { abrirFoto, aCanvas, aImageData, canvasABlob, imageDataABlob, normalizarFoto, soltarCanvas } from './fotos.js';
-import { agregarPagina, guardarDocumento, guardarPagina, obtenerDocumento, obtenerPagina, listarCarpetas, listarDocumentos } from './db.js';
+import { agregarPagina, guardarDocumento, guardarPagina, obtenerDocumento, obtenerPagina, listarCarpetas, listarDocumentos, insertarPaginaDespues } from './db.js';
 import { nuevoId, nombrePorDefecto, fechaDeClase } from './util.js';
 import { ajustes } from './ajustes.js';
 
@@ -49,12 +49,51 @@ async function renderizar(fuente, { esquinas, filtro, rotacion, aplanar = true }
  * Página nueva a partir de una foto ya normalizada ({ blob, ancho, alto, canvas }).
  * Si todo sale bien, el canvas de la foto se suelta: ya no se necesita.
  */
-export async function crearPagina(foto, esquinas) {
+export async function crearPagina(foto, esquinas, { soltar = true } = {}) {
   const filtro = ajustes().filtro;
   const esq = esquinas || await buscarHoja(foto.canvas) || TODA_LA_FOTO;
   const r = await renderizar(foto.canvas, { esquinas: esq, filtro, rotacion: 0 });
-  soltarCanvas(foto.canvas);
+  if (soltar) soltarCanvas(foto.canvas);
   return { id: nuevoId(), original: foto.blob, ancho: foto.ancho, alto: foto.alto, esquinas: esq, filtro, rotacion: 0, aplanar: true, creada: Date.now(), ...r };
+}
+
+/** Las esquinas de las dos páginas de un libro abierto en la foto (canvas o bitmap), o null */
+export async function esquinasDeLibro(fuente, esquinas) {
+  return dividirLibro(aImageData(fuente, 2000), esquinas);
+}
+
+/**
+ * Libro abierto: sus dos páginas (izquierda y derecha) de una sola foto. Si
+ * no se encuentra el lomo, queda como una sola página.
+ * @returns [página] o [izquierda, derecha]
+ */
+export async function crearPaginasDeLibro(foto, esquinas) {
+  const esq = esquinas || await buscarHoja(foto.canvas) || TODA_LA_FOTO;
+  const mitades = await esquinasDeLibro(foto.canvas, esq);
+  if (!mitades) return [await crearPagina(foto, esq)];
+  const izquierda = await crearPagina(foto, mitades[0], { soltar: false });
+  return [izquierda, await crearPagina(foto, mitades[1])];
+}
+
+/**
+ * Una página que es un libro abierto se separa en sus dos páginas: la de la
+ * izquierda queda en su lugar y la de la derecha justo después.
+ * @returns [izquierda, derecha], o null si no se encuentra el lomo
+ */
+export async function separarLibro(pagina) {
+  const bitmap = await abrirFoto(pagina.original);
+  try {
+    const mitades = await esquinasDeLibro(bitmap, pagina.esquinas);
+    if (!mitades) return null;
+    const datos = { filtro: pagina.filtro, rotacion: 0, aplanar: pagina.aplanar !== false };
+    const izquierda = { ...pagina, ...datos, esquinas: mitades[0], ...(await renderizar(bitmap, { ...datos, esquinas: mitades[0] })), ocr: null };
+    const derecha = { ...pagina, ...datos, id: nuevoId(), creada: Date.now(), esquinas: mitades[1], ...(await renderizar(bitmap, { ...datos, esquinas: mitades[1] })), ocr: null };
+    await guardarPagina(izquierda);
+    await insertarPaginaDespues(pagina.docId, pagina.id, derecha);
+    return [izquierda, derecha];
+  } finally {
+    bitmap.close?.();
+  }
 }
 
 /** Vuelve a armar la página con otras esquinas, filtro, giro o aplanado, y la guarda */
@@ -121,13 +160,13 @@ const pendientes = new Map(); // docId → fotos que faltan
 
 const avisar = (tipo, detalle) => eventosPaginas.dispatchEvent(new CustomEvent(tipo, { detail: detalle }));
 
-/** Agrega al documento, en orden, la página que arme `trabajo()` */
+/** Agrega al documento, en orden, la página (o las páginas) que arme `trabajo()` */
 export function encolar(docId, trabajo) {
   pendientes.set(docId, (pendientes.get(docId) || 0) + 1);
   avisar('cambio', { docId });
   cadena = cadena.then(async () => {
     try {
-      await agregarPagina(docId, await trabajo());
+      for (const pagina of [await trabajo()].flat()) await agregarPagina(docId, pagina);
     } catch (e) {
       console.error(e);
       avisar('error', { docId, error: e });

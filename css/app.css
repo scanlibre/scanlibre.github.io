@@ -412,7 +412,7 @@ mark { background: var(--marca-suave); color: var(--texto); border-radius: 3px; 
 .filtro[aria-pressed="true"] { background: var(--marca); color: var(--marca-texto); border-color: transparent; }
 
 .herramientas {
-  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+  display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
   padding: 6px 8px calc(8px + var(--seguro-abajo));
   border-top: 1px solid var(--borde); background: var(--fondo);
 }

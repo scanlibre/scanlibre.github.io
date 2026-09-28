@@ -11,7 +11,7 @@ import { ir, volver } from '../rutas.js';
 import { ajustes, cambiarAjuste } from '../ajustes.js';
 import { detectar, nitidez } from '../motor.js';
 import { aCanvas, aImageData, canvasABlob, normalizarFoto, soltarCanvas } from '../fotos.js';
-import { buscarHoja, crearPagina, encolar, importarArchivos, nuevoDocumento, pendientesEnCola, fotoBorrosa, esBorrosa, TODA_LA_FOTO } from '../paginas.js';
+import { buscarHoja, crearPagina, crearPaginasDeLibro, encolar, importarArchivos, nuevoDocumento, pendientesEnCola, fotoBorrosa, esBorrosa, TODA_LA_FOTO } from '../paginas.js';
 import { agregarPagina, reemplazarPagina } from '../db.js';
 import { elegirArchivos } from '../archivos.js';
 import { abrirRecorte } from './recorte.js';
@@ -447,6 +447,7 @@ async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, 
     ms
   });
   const rafaga = ajustes().rafaga && !sesion.reemplazar;
+  const libro = ajustes().libro && !sesion.reemplazar; // al volver a tomar una página, es una sola
   let esquinas = null, borrosa = false;
   if (!rafaga || auto) {
     esquinas = await buscarHoja(foto.canvas);
@@ -467,9 +468,9 @@ async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, 
     contarPagina(await miniaturaDe(foto.canvas));
     const n = sesion.cantidad;
     encolar(docId, async () => {
-      const pagina = await crearPagina(foto, esquinas || undefined);
-      if (esBorrosa(pagina)) aviso(`La foto ${n} salió borrosa: revísala en el documento.`, 'error', 5000);
-      return pagina;
+      const paginas = libro ? await crearPaginasDeLibro(foto, esquinas || undefined) : [await crearPagina(foto, esquinas || undefined)];
+      if (paginas.some(esBorrosa)) aviso(`La foto ${n} salió borrosa: revísala en el documento.`, 'error', 5000);
+      return paginas;
     });
     ponerPista(`Página ${sesion.cantidad} guardada`, true);
     return;
@@ -479,6 +480,7 @@ async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, 
     esquinas,
     borrosa,
     textoCancelar: 'Repetir foto',
+    titulo: libro ? 'Esquinas del libro abierto' : undefined,
     alListo: async esq => {
       if (sesion.reemplazar) {
         // Volver a tomar una página: queda en su mismo lugar
@@ -490,6 +492,16 @@ async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, 
         return;
       }
       const docId = await asegurarDocumento();
+      if (libro) {
+        // Las dos páginas del libro (o una, si no se encuentra el lomo)
+        const paginas = await crearPaginasDeLibro(foto, esq);
+        for (const p of paginas) {
+          await agregarPagina(docId, p);
+          contarPagina(URL.createObjectURL(p.miniatura));
+        }
+        if (paginas.length === 1) aviso('No encontré el lomo del libro: quedó como una sola página.', 'info', 5000);
+        return volver('camara');
+      }
       const miniatura = await miniaturaDe(foto.canvas); // antes: crearPagina suelta el canvas
       try {
         await agregarPagina(docId, await crearPagina(foto, esq));
@@ -541,6 +553,7 @@ function pintarBotones() {
   const a = ajustes();
   $('#camara-auto').setAttribute('aria-pressed', String(a.autoCaptura));
   $('#camara-rafaga').setAttribute('aria-pressed', String(a.rafaga));
+  $('#camara-libro').setAttribute('aria-pressed', String(a.libro));
   const hay = sesion.cantidad > 0;
   $('#camara-listo').hidden = !hay;
   $('#camara-hueco').hidden = hay;
@@ -580,6 +593,11 @@ export function iniciar() {
   $('#camara-rafaga').addEventListener('click', () => {
     cambiarAjuste('rafaga', !ajustes().rafaga);
     aviso(ajustes().rafaga ? 'Ráfaga: toma varias fotos seguidas; las esquinas se ponen solas.' : 'Después de cada foto podrás ajustar las esquinas.');
+    pintarBotones();
+  });
+  $('#camara-libro').addEventListener('click', () => {
+    cambiarAjuste('libro', !ajustes().libro);
+    aviso(ajustes().libro ? 'Libro: toma el libro abierto con las dos páginas; se separan solas.' : 'Una hoja por foto.');
     pintarBotones();
   });
   $('#camara-linterna').addEventListener('click', async e => {

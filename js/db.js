@@ -110,6 +110,26 @@ export async function reemplazarPagina(docId, paginaId, nueva) {
   });
 }
 
+/** Guarda la página nueva justo después de `despuesDe` en el documento */
+export async function insertarPaginaDespues(docId, despuesDe, pagina) {
+  const db = await abrir();
+  return new Promise((resolver, rechazar) => {
+    const tx = db.transaction(['documentos', 'paginas'], 'readwrite');
+    const docs = tx.objectStore('documentos');
+    docs.get(docId).onsuccess = e => {
+      const doc = e.target.result;
+      if (!doc) { tx.abort(); return; }
+      const i = doc.paginas.indexOf(despuesDe);
+      doc.paginas.splice(i < 0 ? doc.paginas.length : i + 1, 0, pagina.id);
+      doc.modificado = Date.now();
+      docs.put(doc);
+      tx.objectStore('paginas').put({ ...pagina, docId });
+    };
+    tx.oncomplete = () => resolver();
+    tx.onabort = tx.onerror = () => rechazar(tx.error || new Error('No se encontró el documento'));
+  });
+}
+
 export async function borrarPagina(docId, paginaId) {
   const db = await abrir();
   return new Promise((resolver, rechazar) => {

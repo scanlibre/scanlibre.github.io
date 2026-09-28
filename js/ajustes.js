@@ -5,6 +5,7 @@ const CLAVE = 'scanlibre_ajustes';
 const FABRICA = {
   autoCaptura: false,     // tomar la foto sola cuando la hoja está quieta
   rafaga: false,          // varias fotos seguidas sin parar a revisar el recorte
+  libro: false,           // libro abierto: cada foto se separa en sus dos páginas
   filtro: 'mejorada',     // filtro de las páginas nuevas
   pdfTamano: 'carta',
   pdfCalidad: 'normal',

@@ -33,6 +33,7 @@ export function abrirRecorte(op) {
 export function mostrar() {
   if (!estado) return volver(''); // se recargó la página en esta pantalla: no hay foto
   $('#recorte-cancelar').setAttribute('aria-label', estado.textoCancelar || 'Cancelar');
+  $('#titulo-recorte').textContent = estado.titulo || 'Ajusta las esquinas';
   $('#recorte-borrosa').hidden = !estado.borrosa;
   trabajando = false;
   $('#recorte-listo').disabled = false;

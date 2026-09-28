@@ -9,6 +9,7 @@ import { tamanoEnderezado } from './geometria.js';
 import { medirNitidez } from './nitidez.js';
 import { prepararParaLeer } from './lectura.js';
 import { aplanarPagina } from './aplanar.js';
+import { buscarLomo, dividirEsquinas } from './libro.js';
 
 export { detectarHoja, medirNitidez, prepararParaLeer };
 
@@ -30,6 +31,18 @@ export function procesarPagina(imagen, { esquinas, filtro = 'mejorada', rotacion
   const r = aplicarFiltro(lista, filtro);
   // La nitidez se mide en la hoja enderezada sin filtro: el B/N o un dibujo no la engañan
   return { data: r.data, width: r.width, height: r.height, nitidez: medirNitidez(plana).valor, aplanada };
+}
+
+/**
+ * Libro abierto: las esquinas de cada una de sus dos páginas, o null si no se encuentra el lomo.
+ * @param esquinas las del libro entero (fracciones de la foto)
+ */
+export function dividirLibro(imagen, esquinas) {
+  const px = esquinas.map(p => ({ x: p.x * imagen.width, y: p.y * imagen.height }));
+  const t = tamanoEnderezado(px, imagen.width, imagen.height);
+  const k = Math.min(1, 1200 / Math.max(t.ancho, t.alto));
+  const s = buscarLomo(enderezar(imagen, px, Math.max(8, Math.round(t.ancho * k)), Math.max(8, Math.round(t.alto * k))));
+  return s === null ? null : dividirEsquinas(esquinas, s);
 }
 
 /** Nitidez de la hoja (enderezada a poca resolución): para avisar si la foto salió borrosa */

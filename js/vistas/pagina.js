@@ -4,7 +4,7 @@
 import { $, el, aviso, confirmar, nombreArchivo } from '../util.js';
 import { obtenerDocumento, guardarDocumento, obtenerPagina, borrarPagina } from '../db.js';
 import { ir, volver } from '../rutas.js';
-import { reprocesar, esBorrosa } from '../paginas.js';
+import { reprocesar, esBorrosa, separarLibro } from '../paginas.js';
 import { nuevaSesion } from './camara.js';
 import { abrirFoto } from '../fotos.js';
 import { FILTROS } from '../imagen/filtros.js';
@@ -134,6 +134,16 @@ export function iniciar() {
   $('#pagina-mover-antes').addEventListener('click', () => mover(-1));
   $('#pagina-mover-despues').addEventListener('click', () => mover(1));
   $('#pagina-curva-boton').addEventListener('click', () => { if (pagina) cambiar({ aplanar: pagina.aplanar === false }); });
+  // Libro abierto en una sola página: se separa en dos (la derecha queda después)
+  $('#pagina-separar').addEventListener('click', () => conEspera(async () => {
+    if (!pagina) return;
+    const r = await separarLibro(pagina);
+    if (!r) return aviso('No encontré el lomo del libro. Si es un libro abierto, toca Recortar y deja adentro las dos páginas.', 'error', 6000);
+    doc = await obtenerDocumento(doc.id);
+    pagina = r[0];
+    pintar();
+    aviso(`Listo: quedaron las páginas ${n} y ${n + 1}.`, 'exito');
+  }));
   $('#pagina-texto').addEventListener('click', () => { if (pagina) mostrarTexto([pagina], { titulo: `Texto de la página ${n}`, nombre: `${doc.nombre} – página ${n}` }); });
   $('#pagina-guardar').addEventListener('click', guardarImagen);
   $('#pagina-borrar').addEventListener('click', borrar);

@@ -48,6 +48,20 @@ function cuadrosConTemblor(escena, W, H, m, a) {
   return cuadros;
 }
 
+/** Video de cámara falso con una imagen cualquiera ({ data, width, height }, de lados pares) */
+export function videoDeImagen(img, nombre) {
+  const ruta = join(carpeta, nombre);
+  escribirY4M(ruta, [img]);
+  return ruta;
+}
+
+/** Guarda una imagen como PNG en la carpeta de pruebas y devuelve la ruta */
+export function guardarPNG(img, nombre) {
+  const ruta = join(carpeta, nombre);
+  writeFileSync(ruta, aPNG(img));
+  return ruta;
+}
+
 export async function crearEntorno({ video } = {}) {
   const srv = await servir();
   const args = video ? ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${video}`] : [];
