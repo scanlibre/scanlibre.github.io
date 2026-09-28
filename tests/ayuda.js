@@ -9,6 +9,12 @@ import { escribirY4M } from './video-falso.js';
 
 export const carpeta = mkdtempSync(join(tmpdir(), 'scanlibre-'));
 
+/**
+ * Abre Chromium. Con CHROMIUM_PATH se usa ese ejecutable (por ejemplo, cuando la
+ * máquina trae un Chromium de otra versión de Playwright); si no, el de Playwright.
+ */
+export const lanzar = (opciones = {}) => chromium.launch({ ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}), ...opciones });
+
 /** Guarda una foto de prueba (escena k al doble de tamaño) y devuelve su ruta y las esquinas reales (0..1) */
 export function fotoDePrueba(k = 1, nombre = `foto${k}.png`, { borrosa = false } = {}) {
   const e = ESCENAS[k];
@@ -66,7 +72,7 @@ export async function crearEntorno({ video } = {}) {
   const srv = await servir();
   const args = video ? ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${video}`] : [];
   // Con UTF-8: sin eso, Chromium en Linux descarga "Cálculo.pdf" como "download"
-  const navegador = await chromium.launch({ args, env: { ...process.env, LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' } });
+  const navegador = await lanzar({ args, env: { ...process.env, LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' } });
   return {
     url: srv.url,
     /** @param antes código que corre en la página antes que la app (por ejemplo, para simular algo del teléfono) */
@@ -88,7 +94,7 @@ export async function crearEntorno({ video } = {}) {
 
 /** Foto de una hoja con texto impreso (captura de una página HTML) */
 export async function fotoConTexto(nombre, lineas) {
-  const nav = await chromium.launch();
+  const nav = await lanzar();
   const p = await nav.newPage({ viewport: { width: 1000, height: 700 } });
   await p.setContent(`<body style="margin:60px;font:40px Georgia;background:#fff;color:#111">${lineas.map(l => `<p>${l}</p>`).join('')}</body>`);
   const ruta = join(carpeta, nombre);

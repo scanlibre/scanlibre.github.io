@@ -55,7 +55,7 @@ android {
     namespace "io.github.scanlibre"
     defaultConfig {
         applicationId "io.github.scanlibre"
-        minSdkVersion 21
+        minSdkVersion 23
         targetSdkVersion 36
         versionCode 1
         versionName "1.0.0"

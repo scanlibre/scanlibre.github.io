@@ -2,12 +2,11 @@
 // Las capturas de la app para la ficha de Google Play (1080 × 1920) y el
 // gráfico destacado (1024 × 500). Se toman de la app de verdad, con hojas de
 // ejemplo fotografiadas "sobre una mesa". Correr con:  node android/tienda/generar.mjs
-import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { servir } from '../../tests/servidor.js';
-import { carpeta } from '../../tests/ayuda.js';
+import { carpeta, lanzar } from '../../tests/ayuda.js';
 import { escribirY4M } from '../../tests/video-falso.js';
 
 const AQUI = fileURLToPath(new URL('.', import.meta.url));
@@ -35,7 +34,7 @@ async function hojaSobreMesa(navegador, nombre, [titulo, ...parrafos], { ancho =
 }
 
 const srv = await servir();
-const nav = await chromium.launch({ env: { ...process.env, LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' } });
+const nav = await lanzar({ env: { ...process.env, LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' } });
 const hojas = {};
 for (const [k, texto] of Object.entries(HOJAS)) hojas[k] = await hojaSobreMesa(nav, `tienda-${k}.png`, texto, { giro: k === 'historia' ? 2 : -3 });
 
@@ -118,7 +117,7 @@ const img = await cam.evaluate(async fuente => {
 await cam.close();
 const video = join(carpeta, 'tienda-camara.y4m');
 escribirY4M(video, [{ data: Uint8ClampedArray.from(img), width: 720, height: 960 }]);
-const navCam = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${video}`] });
+const navCam = await lanzar({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${video}`] });
 const ctxCam = await navCam.newContext({ viewport: { width: 360, height: 640 }, deviceScaleFactor: 3, colorScheme: 'light' });
 await ctxCam.grantPermissions(['camera'], { origin: srv.url.replace(/\/$/, '') });
 const pc = await ctxCam.newPage();

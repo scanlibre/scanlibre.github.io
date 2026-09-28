@@ -8,6 +8,7 @@ El proyecto se generó con [Bubblewrap](https://github.com/GoogleChromeLabs/bubb
 |---|---|
 | Nombre del paquete | `io.github.scanlibre` (no se puede cambiar después de publicar) |
 | Versión | `1.0.0` (código 1) |
+| Android mínimo | 6.0 (API 23): lo pide androidbrowserhelper 2.7; los teléfonos más viejos tampoco tienen un Chrome que corra la app |
 | Firma | llave de subida `scanlibre`, RSA 4096 |
 | Huella SHA-256 de la llave de subida | `8F:42:5E:4B:80:5A:DD:0F:F7:F6:0B:51:55:5B:D5:07:99:BB:B7:00:15:47:71:E0:4A:A7:68:9A:13:99:33:B5` |
 

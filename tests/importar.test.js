@@ -2,11 +2,10 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { chromium } from 'playwright';
 import { renglonesDeTexto } from '../js/importar.js';
 import { crearPDFConContrasena } from '../js/pdf.js';
 import { JPEG_COLOR_16x8 } from './jpegs.js';
-import { crearEntorno, carpeta, fotoDePrueba, importarFoto, leerBase } from './ayuda.js';
+import { crearEntorno, carpeta, fotoDePrueba, importarFoto, leerBase, lanzar } from './ayuda.js';
 
 describe('Importar PDF: el texto', () => {
   it('arma los renglones y las palabras con su lugar', () => {
@@ -39,7 +38,7 @@ describe('Importar PDF en la app', () => {
   before(async () => {
     env = await crearEntorno();
     // Un PDF con texto de verdad, de dos páginas (como el de una tarea hecha en Word)
-    const nav = await chromium.launch();
+    const nav = await lanzar();
     const p = await nav.newPage();
     await p.setContent(`<body style="font:22px Arial;margin:60px">
       <h1>Tarea de Matemática</h1><p>Resolver los ejercicios del capítulo tres.</p>
