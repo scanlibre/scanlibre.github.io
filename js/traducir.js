@@ -1,8 +1,7 @@
 // ScanLibre · traducir.js
-// Traducir el texto leído entre español e inglés. Si el navegador trae su
-// propio traductor (Chrome: el idioma se baja una vez y después traduce sin
-// internet, dentro del teléfono), se usa ese. Si no, queda la opción de abrir
-// Google Traductor, que sí manda el texto a internet (se avisa antes).
+// Traducir el texto leído entre español e inglés con el traductor que trae el
+// navegador (Chrome: el idioma se baja una vez y después traduce sin internet,
+// dentro del teléfono). El texto nunca sale del teléfono.
 
 export const LENGUAS = { es: 'español', en: 'inglés' };
 
@@ -58,11 +57,4 @@ export async function traducir(texto, de, a, { alAvanzar } = {}) {
   } finally {
     traductor.destroy?.();
   }
-}
-
-/** Google Traductor con el texto (hasta unos 4800 caracteres caben en la dirección) */
-export const MAX_ENLACE = 4800;
-export function enlaceDeGoogle(texto, de, a) {
-  const base = `https://translate.google.com/?sl=${de}&tl=${a}&op=translate`;
-  return texto && texto.length <= MAX_ENLACE ? `${base}&text=${encodeURIComponent(texto)}` : base;
 }

@@ -39,9 +39,9 @@
 
   <div class="corto">
     <ul>
-      <li><strong>Tus fotos y documentos se procesan y se guardan en tu teléfono.</strong> No hay cuentas, anuncios, analítica ni rastreo.</li>
-      <li><strong>Solo sale algo a internet si tú lo eliges:</strong> el respaldo en la nube (va cifrado), traducir con Google Traductor, abrir el enlace de un código QR o compartir un archivo con otra app.</li>
-      <li>No vendemos ni compartimos datos con nadie.</li>
+      <li><strong>Tus fotos y documentos se procesan y se guardan en tu teléfono.</strong> ScanLibre no tiene servidor: la app no sube nada a internet.</li>
+      <li>No hay cuentas, anuncios, analítica ni rastreo. No recopilamos, no vendemos y no compartimos datos.</li>
+      <li><strong>Un documento solo sale del teléfono si tú lo decides:</strong> al compartirlo con otra app (WhatsApp, Drive…) o al guardar un respaldo en archivo.</li>
     </ul>
   </div>
 
@@ -49,35 +49,29 @@
   <p>La app pide la cámara para fotografiar documentos y leer códigos QR. Las fotos se procesan en el teléfono (encontrar la hoja, enderezarla, los filtros) y no se suben a ningún lado.</p>
 
   <h2>Dónde quedan tus documentos</h2>
-  <p>En el almacenamiento de la app dentro de tu teléfono. Si borras los datos de la app o la desinstalas, se borran. El respaldo en archivo (.zip) lo guardas tú donde quieras.</p>
-
-  <h2>Respaldo en la nube (solo si lo activas)</h2>
-  <ul>
-    <li>Antes de subir, cada foto y el índice de tus documentos se <strong>cifran en tu teléfono</strong> (AES-256-GCM) con una llave que sale de tu <strong>código de respaldo</strong>. El código no sale nunca del teléfono: nosotros no lo conocemos y no podemos ver ni recuperar tus documentos.</li>
-    <li>En el servidor (Supabase, en Estados Unidos) queda: un número al azar que identifica tu respaldo, una huella de una llave que sale del código (para que solo quien tiene el código pueda cambiarlo o borrarlo), los archivos cifrados con nombres al azar, lo que pesan y cuándo se subieron.</li>
-    <li>Para evitar abusos, cuando se crea un respaldo nuevo se guarda por 24 horas una versión disfrazada (irreversible) de la dirección de internet (IP) desde donde se creó. Después se borra.</li>
-    <li>Puedes <strong>borrar tu respaldo de la nube</strong> cuando quieras: Menú → Respaldo en la nube → Más opciones → Borrar mi respaldo de la nube. Se borra en el momento.</li>
-  </ul>
+  <p>En el almacenamiento de la app dentro de tu teléfono. Si borras los datos de la app o la desinstalas, se borran. Por eso conviene hacer de vez en cuando un respaldo en archivo (.zip), que guardas tú donde quieras y sirve para pasar tus documentos a otro teléfono.</p>
 
   <h2>Leer el texto y escucharlo</h2>
   <p>El texto de las páginas se lee en el teléfono (el lector se baja una vez desde este mismo sitio) y la voz es la del teléfono. Nada de eso sale a internet.</p>
 
   <h2>Traducir</h2>
-  <p>Si tu teléfono trae su propio traductor, la traducción se hace ahí mismo. Si no, y eliges «Abrir Google Traductor», el texto se envía a Google, que lo trata según <a href="https://policies.google.com/privacy?hl=es">su política de privacidad</a>. La app lo avisa antes.</p>
+  <p>La traducción se hace con el traductor que trae tu teléfono, ahí mismo. Si tu teléfono no lo trae, la app no manda el texto a ningún lado: puedes compartirlo tú con la app de traductor que uses, y esa app lo trata según sus propias reglas.</p>
 
   <h2>Códigos QR y enlaces</h2>
   <p>Los códigos se leen en el teléfono. Si abres el enlace de un código, lo abre tu navegador; antes se muestra a qué sitio lleva.</p>
 
   <h2>Cómo se protege</h2>
   <ul>
-    <li>La app solo corre su propio código: no carga scripts de otros sitios y no se deja meter dentro de otra página.</li>
+    <li>La app solo corre su propio código y solo puede conectarse a su propio sitio (para actualizarse): no carga scripts de otros sitios, no manda datos a otros servidores y no se deja meter dentro de otra página.</li>
     <li>Tus documentos quedan guardados en el teléfono tal cual, sin cifrar (como las fotos de la galería). Lo que los protege es el <strong>bloqueo de pantalla</strong> de tu teléfono: úsalo, sobre todo si guardas copias de tu cédula.</li>
-    <li>El código de respaldo también queda guardado en el teléfono, para que el respaldo se haga solo. Si pierdes el teléfono, entra desde otro con tu código y borra el respaldo de la nube si no lo vas a recuperar.</li>
     <li>¿Encontraste una falla de seguridad? Repórtala en privado como dice <a href="https://github.com/scanlibre/scanlibre.github.io/blob/main/SECURITY.md">SECURITY.md</a>.</li>
   </ul>
 
   <h2>Niñas y niños</h2>
   <p>ScanLibre no pide datos personales a nadie, de ninguna edad.</p>
+
+  <h2>Antes había un respaldo en la nube</h2>
+  <p>Hasta la versión 31 hubo un respaldo en la nube opcional (cifrado en el teléfono). Se quitó para que todo quede en tu teléfono. Nadie llegó a guardar un respaldo ahí, y si tu teléfono tenía guardado un código de respaldo, la app lo borra sola.</p>
 
   <h2>Cambios y preguntas</h2>
   <p>Si esta política cambia, se actualiza esta página con su fecha. Para preguntas o reclamos, escríbenos en <a href="https://github.com/scanlibre/scanlibre.github.io/issues">github.com/scanlibre/scanlibre.github.io/issues</a>.</p>

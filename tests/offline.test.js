@@ -55,7 +55,7 @@ describe('Sin internet', () => {
     const [privacidad] = await Promise.all([page.context().waitForEvent('page'), page.click('#acerca-privacidad')]);
     await privacidad.waitForLoadState();
     assert.equal(await privacidad.textContent('h1'), 'Privacidad de ScanLibre');
-    assert.match(await privacidad.textContent('main'), /cifran en tu teléfono/);
+    assert.match(await privacidad.textContent('main'), /no tiene servidor/);
     const assetlinks = await (await page.request.get(env.url + '.well-known/assetlinks.json')).json();
     assert.equal(assetlinks[0].target.package_name, 'io.github.scanlibre');
     assert.match(assetlinks[0].target.sha256_cert_fingerprints[0], /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/);

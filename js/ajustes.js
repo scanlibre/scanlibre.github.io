@@ -18,8 +18,6 @@ const FABRICA = {
   ocrIdioma: 'spa',
   vozVelocidad: 1,        // velocidad de la voz al escuchar el texto
   carpeta: null,          // carpeta elegida en el inicio: lo que se escanea se guarda ahí
-  nube: null,             // respaldo en la nube: { codigo, ultimo, bytes, documentos, … } (ver nube.js)
-  dispositivo: null,      // un número al azar de este teléfono (para notar si otro respalda con el mismo código)
   liviano: null           // trabajar con fotos más chicas (gama baja): null = según el teléfono (ver rendimiento.js)
 };
 
@@ -29,8 +27,18 @@ export function ajustes() {
   if (!actuales) {
     try { actuales = { ...FABRICA, ...JSON.parse(localStorage.getItem(CLAVE) || '{}') }; }
     catch (e) { actuales = { ...FABRICA }; }
+    olvidarNube();
   }
   return actuales;
+}
+
+// Hasta la versión 31 hubo respaldo en la nube: su código de respaldo no se
+// queda guardado en el teléfono. Ahora todo se queda aquí.
+function olvidarNube() {
+  if (!('nube' in actuales) && !('dispositivo' in actuales)) return;
+  delete actuales.nube;
+  delete actuales.dispositivo;
+  try { localStorage.setItem(CLAVE, JSON.stringify(actuales)); localStorage.removeItem('scanlibre_cambio'); } catch (e) {}
 }
 
 export function cambiarAjuste(nombre, valor) {

@@ -50,6 +50,7 @@ describe('Seguridad: configuración', () => {
     assert.match(csp, /script-src 'self';/);
     assert.match(csp, /object-src 'none'/);
     assert.match(csp, /base-uri 'self'/);
+    assert.match(csp, /connect-src 'self';/, 'la app no se conecta a ningún servidor de afuera: todo queda en el teléfono');
     assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval|\*/);
     assert.match(leer('index.html'), /<meta name="referrer" content="no-referrer">/);
     assert.doesNotMatch(leer('index.html'), /<script(?![^>]*\bsrc=)[^>]*>/, 'sin scripts escritos dentro de la página');
@@ -81,5 +82,16 @@ describe('Seguridad: en el navegador', () => {
     const marco = page.frames().find(f => f !== page.mainFrame());
     await marco.waitForSelector('a:has-text("Abrir ScanLibre")');
     assert.equal(await marco.locator('#vista-inicio').count(), 0, 'la app no se muestra adentro');
+  });
+
+  it('el código del respaldo en la nube (hasta la versión 31) se borra del teléfono', async () => {
+    const page = await env.pagina({ antes: () => {
+      localStorage.setItem('scanlibre_ajustes', JSON.stringify({ filtro: 'color', nube: { codigo: 'ABCD-EFGH' }, dispositivo: 'x1' }));
+      localStorage.setItem('scanlibre_cambio', '123');
+    } });
+    const [guardado, cambio] = await page.evaluate(() => [JSON.parse(localStorage.getItem('scanlibre_ajustes')), localStorage.getItem('scanlibre_cambio')]);
+    assert.equal(guardado.filtro, 'color', 'lo demás se queda');
+    assert.ok(!('nube' in guardado) && !('dispositivo' in guardado));
+    assert.equal(cambio, null);
   });
 });

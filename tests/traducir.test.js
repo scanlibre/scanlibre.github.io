@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { traducir, traductorDelTelefono, enlaceDeGoogle, MAX_ENLACE } from '../js/traducir.js';
+import { traducir, traductorDelTelefono } from '../js/traducir.js';
 import { crearEntorno, importarFoto, fotoConTexto } from './ayuda.js';
 
 describe('Traducir: las cuentas', () => {
@@ -20,11 +20,6 @@ describe('Traducir: las cuentas', () => {
     assert.equal(await traductorDelTelefono('es', 'en'), null);
     delete globalThis.Translator;
     assert.equal(await traductorDelTelefono('es', 'en'), null, 'sin traductor en el navegador');
-  });
-
-  it('el enlace de Google Traductor lleva el texto (si cabe)', () => {
-    assert.equal(enlaceDeGoogle('La célula', 'es', 'en'), 'https://translate.google.com/?sl=es&tl=en&op=translate&text=La%20c%C3%A9lula');
-    assert.equal(enlaceDeGoogle('x'.repeat(MAX_ENLACE + 1), 'es', 'en'), 'https://translate.google.com/?sl=es&tl=en&op=translate');
   });
 });
 
@@ -65,19 +60,20 @@ describe('Traducir en la app', () => {
     assert.deepEqual(page.errores.filter(e => !/too small to scale|cannot be recognized|Empty page/i.test(e)), []);
   });
 
-  it('sin traductor en el teléfono, avisa y abre Google Traductor con el texto', async () => {
+  it('sin traductor en el teléfono, el texto no sale a internet: se puede pasar a otra app', async () => {
     const page = await env.pagina({ antes: () => {
       delete window.Translator;
-      window.open = (url, destino, opciones) => { window.abierto = { url, destino, opciones }; };
+      window.open = url => { window.abierto = url; };
+      Object.defineProperty(navigator, 'share', { configurable: true, value: async datos => { window.compartido = datos; } });
     } });
     await abrirTexto(page);
     await page.click('dialog .boton:has-text("Traducir")');
     await page.click('.menu-opcion:has-text("Al inglés")');
-    await page.waitForSelector('dialog .boton:has-text("Abrir Google Traductor")');
-    assert.match(await page.textContent('dialog[open] >> nth=-1'), /el texto se envía a Google/);
-    await page.click('dialog .boton:has-text("Abrir Google Traductor")');
-    const { url, destino, opciones } = await page.evaluate(() => window.abierto);
-    assert.match(url, /^https:\/\/translate\.google\.com\/\?sl=es&tl=en&op=translate&text=.*c%C3%A9lula/);
-    assert.deepEqual([destino, opciones], ['_blank', 'noopener']);
+    await page.waitForSelector('dialog .boton:has-text("Compartir el texto")');
+    assert.match(await page.textContent('dialog[open] >> nth=-1'), /no manda tu texto a internet/);
+    await page.click('dialog[open] >> nth=-1 >> .boton:has-text("Compartir el texto")');
+    await page.waitForFunction(() => window.compartido);
+    assert.match((await page.evaluate(() => window.compartido)).text, /célula/);
+    assert.equal(await page.evaluate(() => window.abierto), undefined, 'no abre ningún sitio');
   });
 });

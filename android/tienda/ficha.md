@@ -41,7 +41,7 @@ ScanLibre es un escáner de documentos gratis, hecho para estudiantes. Todo lo q
 
 🔒 TUS DOCUMENTOS SON TUYOS
 • Todo se procesa en tu teléfono. No hay cuentas, anuncios ni rastreo.
-• Respaldo en archivo, o respaldo en la nube cifrado en tu teléfono: se recupera con un código que solo tú tienes. Nadie más puede verlo, ni nosotros.
+• Nada se sube a internet: no hay servidor. El respaldo es un archivo que guardas donde quieras.
 • Papelera de 30 días.
 • Lee códigos QR y muestra a qué sitio llevan antes de abrirlos.
 

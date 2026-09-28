@@ -27,7 +27,7 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Texto (OCR), gratis y sin internet:** copiar o compartir el texto de una página o de todo el documento, en español, inglés o los dos. Y **PDF con texto buscable**: se ve igual, pero se pueden buscar y copiar las palabras. Antes de leer, la página se prepara (papel parejo, más contraste y nitidez): así lee también la letra chica de un libro.
 - **El texto a Word (.docx)** para seguir trabajándolo, con los renglones de cada párrafo juntados y las listas aparte.
 - **Escuchar el texto** con la voz del teléfono, frase por frase, con pausa. Mientras lee se ve el texto con **la frase resaltada** (y la palabra, en los teléfonos que avisan por dónde van); tocar una frase lee desde ahí, y la velocidad va de 0,8× a 1,5×.
-- **Traducir el texto** al inglés o al español, para leer una lectura en inglés o mandar un resumen. En Chrome se usa el traductor que trae el teléfono: el idioma se baja una vez y después traduce **sin internet, sin que el texto salga del teléfono**. Si el teléfono no lo trae, se abre Google Traductor con el texto, avisando antes que así sí se envía a Google. La traducción se copia, se escucha o se lleva a Word.
+- **Traducir el texto** al inglés o al español, para leer una lectura en inglés o mandar un resumen. En Chrome se usa el traductor que trae el teléfono: el idioma se baja una vez y después traduce **sin internet, sin que el texto salga del teléfono**. Si el teléfono no lo trae, la app no manda el texto a ningún lado: se puede compartir con la app de traductor que uses. La traducción se copia, se escucha o se lleva a Word.
 - **Fotos a resolución completa** (hasta 4000 px, 12 MP): la letra chica conserva el detalle. Aunque el teléfono tenga un sensor de 48 o 50 MP, la foto se pide a esa medida: más grande no se lee mejor y traba al teléfono.
 - **Liviana en teléfonos sencillos:** la foto se abre, se achica, se endereza y se guarda en segundo plano, así que la cámara no se congela al tomarla. En los de gama baja (2 GB de memoria o menos, o si una foto tardó mucho en armarse) la foto queda a 3000 px y la página a 2400: se lee igual de bien y pesa casi la mitad.
 - **Buscar en todos los documentos:** en los nombres y en el texto de cada página, sin importar tildes ni mayúsculas. Muestra la página y el pedazo donde está la palabra; las páginas que faltan se leen con un toque.
@@ -45,7 +45,6 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **PDF con contraseña, gratis:** cifrado AES-256 estándar (el que abren Adobe, Chrome y los visores de Android e iPhone). La contraseña no se guarda en ningún lado.
 - **Compartir** directo a WhatsApp, Drive o Classroom, o descargar el PDF.
 - **Respaldo gratis:** todos los documentos en un `.zip` para guardar donde quieras y restaurarlos en otro teléfono.
-- **Respaldo en la nube, cifrado:** se activa con un **código de respaldo** que solo tú guardas (sin cuenta ni correo). Todo se cifra en el teléfono antes de subir (AES-256): en la nube solo hay bytes que nadie más puede leer, ni ScanLibre. Se respalda solo cuando hay cambios y hay internet, y sube solo lo nuevo. En otro teléfono se recupera con el código. Si dos teléfonos usan el mismo código, pregunta antes de pisar nada y deja **juntar los dos**. Hasta 200 MB por respaldo (las fotos originales van reducidas a 3000 px).
 - **App de Android** para Google Play (Trusted Web Activity): la misma app a pantalla completa, que se actualiza sola con la web. Ver [`android/LEEME.md`](android/LEEME.md).
 - **Tema claro u oscuro** según el teléfono. Las páginas escaneadas nunca se invierten.
 
@@ -76,9 +75,6 @@ La detección, los filtros, el PDF y el respaldo están escritos para esta app, 
 | Traducir | `js/traducir.js` | La API Translator del navegador, párrafo por párrafo (se ve el avance y los encabezados «— Página N —» quedan como están). |
 | Contraseña | `js/cifrado.js` | Cifrado estándar de PDF, revisión 6 (AES-256) con WebCrypto: el "algoritmo 2.B" para la clave y AES-CBC para cada imagen, página y texto. |
 | Respaldo | `js/respaldo.js` | ZIP propio para el respaldo. |
-| Código y llaves | `js/llaves.js` | Código de 23 caracteres al azar en base 32 de Crockford (115 bits) más uno de control. De él salen con HKDF-SHA-256 el número del respaldo, la llave que ve el servidor, la de cifrado (AES-256-GCM, con el nombre del archivo atado al cifrado) y la de los nombres (HMAC). |
-| Nube | `js/nube.js` | Cada foto se nombra por la huella (SHA-256) de su contenido: si ya está en la nube no se vuelve a subir. El índice va comprimido y cifrado; una «marca» cifrada dice qué teléfono respaldó por última vez. |
-| Servidor | `supabase/` | Proyecto propio de Supabase: una tabla (el número del respaldo y la huella de su llave), un depósito privado y la función `respaldo`, que revisa la llave y da permisos firmados para subir y bajar directo al depósito. |
 | Guardado | `js/db.js` | IndexedDB, solo en el teléfono. |
 
 Probada con 12 fotos reales de documentos (cartas, formularios, cuadernos con renglones, apuntes a mano, recibos): encontró la hoja en las 12.
@@ -116,8 +112,6 @@ js/traducir.js      traducir el texto
 vendor/tesseract/   Tesseract.js, sus núcleos y los idiomas (ver LEEME.md)
 vendor/pdfjs/       pdf.js, para importar PDF
 vendor/jsqr/        jsQR, para leer códigos QR
-js/nube.js          respaldo cifrado en la nube (con js/llaves.js)
-supabase/           la base y la función del respaldo en la nube
 android/            la app de Android (TWA) y la ficha de Google Play
 privacidad.html     política de privacidad
 .well-known/        assetlinks.json: el sitio confía en la app de Android
@@ -142,11 +136,10 @@ Lo que sigue sale de lo que la gente les pide y les reclama a CamScanner, Genius
 - ✅ Modo libro (las dos páginas de una foto).
 - ✅ Modo pizarra.
 - ✅ Modo cédula (las dos caras en una hoja, a tamaño real).
-- ✅ Respaldo cifrado opcional en la nube (Supabase).
 - ✅ App de Android lista para Google Play (TWA con Bubblewrap). Falta la cuenta de desarrollador y la prueba cerrada.
 
-**Nunca:** anuncios, marca de agua de la app en tus documentos, cuentas obligatorias ni funciones gratis que después se cobran.
+**Nunca:** anuncios, marca de agua de la app en tus documentos, cuentas, servidores con tus datos ni funciones gratis que después se cobran.
 
 ## Privacidad
 
-Las fotos, los documentos y los PDF se procesan y se quedan en el teléfono. No hay cuentas, analítica ni rastreo. Lo único que puede salir a internet es lo que tú eliges: el respaldo en la nube (cifrado en el teléfono con tu código: el servidor no puede leerlo), traducir con Google Traductor en un teléfono sin traductor propio (la app lo avisa antes) o abrir el enlace de un código QR. Todo el detalle está en [privacidad.html](https://scanlibre.github.io/privacidad.html).
+Las fotos, los documentos y los PDF se procesan y se quedan en el teléfono. La app no tiene servidor: no sube nada a internet (su política de contenido ni siquiera la deja conectarse a otro sitio). No hay cuentas, analítica ni rastreo. Tus documentos solo salen del teléfono si tú los compartes con otra app, guardas un respaldo en archivo o abres el enlace de un código QR. Hasta la versión 31 hubo un respaldo cifrado en la nube; se quitó para que todo quede en el teléfono. Todo el detalle está en [privacidad.html](https://scanlibre.github.io/privacidad.html).

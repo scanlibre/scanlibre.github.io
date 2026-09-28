@@ -16,18 +16,15 @@ Solo se corrige la versión publicada en <https://scanlibre.github.io> (la app d
 | Parte | Dónde |
 |---|---|
 | La app web (PWA) | `index.html`, `js/`, `css/`, `sw.js` |
-| El respaldo en la nube | `js/nube.js`, `js/llaves.js`, `supabase/` (función `respaldo`, tabla y depósito) |
 | La app de Android (TWA) | `android/`, `.well-known/assetlinks.json` |
 | La publicación | `.github/workflows/` |
 
-Fuera de alcance: fallas de Chrome, Android, Supabase o GitHub (repórtalas a ellos), y ataques que necesitan el teléfono desbloqueado en la mano.
+Fuera de alcance: fallas de Chrome, Android o GitHub (repórtalas a ellos), y ataques que necesitan el teléfono desbloqueado en la mano.
 
 ## Cómo está protegida
 
-- **Los documentos se quedan en el teléfono.** No hay cuentas, ni analítica, ni rastreo.
+- **Todo se queda en el teléfono.** ScanLibre no tiene servidor ni base de datos: no hay nada que robar de nuestro lado. La política de contenido solo deja conectarse al propio sitio (`connect-src 'self'`), así que la app no puede conectarse a ningún otro servidor. No hay cuentas, ni analítica, ni rastreo.
 - **Política de contenido estricta** (CSP): solo corre el código de este mismo sitio; nada de scripts de otros lados ni `eval`. La página no se deja meter dentro de otra (clickjacking).
-- **Respaldo en la nube cifrado de extremo a extremo**: AES-256-GCM con llaves que salen (HKDF-SHA-256) de un código de 115 bits al azar que solo tiene la persona. El servidor guarda bytes cifrados con nombres al azar y la huella SHA-256 de una llave derivada; no puede leer nada. Ver `js/llaves.js`.
-- **Servidor**: la tabla tiene RLS y nadie más que la función tiene permiso; el depósito es privado; las funciones de la base son `security definer` con `search_path` vacío; la función compara la llave en tiempo constante, valida cada pedido y limita el espacio (200 MB por respaldo, tope general) y los respaldos nuevos por conexión.
 - **Archivos que llegan de afuera** (PDF, respaldos .zip, fotos, códigos QR): pdf.js sin `eval`, un .zip no puede inflarse sin límite, un enlace de QR muestra a qué sitio lleva antes de abrirse y nunca se abre un `javascript:`.
 - **Publicación**: las acciones de GitHub están fijadas por commit y los workflows solo tienen permiso de lectura. La llave de firma de Android vive en los secretos de GitHub, nunca en el repositorio.
 

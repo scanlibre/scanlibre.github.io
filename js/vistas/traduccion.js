@@ -1,9 +1,10 @@
 // ScanLibre · vistas/traduccion.js
-// Traducir el texto al inglés o al español: dentro del teléfono si se puede
-// (sin mandar nada a internet), o con Google Traductor avisando antes.
+// Traducir el texto al inglés o al español, siempre dentro del teléfono: la
+// app no manda el texto a internet. Si el teléfono no trae traductor, se puede
+// pasar el texto a otra app (la que la persona elija).
 
 import { el, icono, hoja, aviso, menu } from '../util.js';
-import { LENGUAS, traductorDelTelefono, traducir, enlaceDeGoogle, MAX_ENLACE } from '../traducir.js';
+import { LENGUAS, traductorDelTelefono, traducir } from '../traducir.js';
 import { puedeHablar, crearLector } from '../voz.js';
 
 /**
@@ -18,7 +19,7 @@ export async function traducirTexto(texto, { ingles = false, nombre = 'Traducci�
   if (!a) return;
   const de = a === 'en' ? 'es' : 'en';
   const disponible = await traductorDelTelefono(de, a);
-  return disponible ? enElTelefono(texto, de, a, disponible, nombre) : conGoogle(texto, de, a);
+  return disponible ? enElTelefono(texto, de, a, disponible, nombre) : sinTraductor(texto, a);
 }
 
 /** Con el traductor del navegador: se ve el avance y después la traducción, para copiar, escuchar o llevar a Word */
@@ -76,21 +77,21 @@ function enElTelefono(texto, de, a, disponible, nombre) {
   return abierta;
 }
 
-/** Sin traductor en el teléfono: Google Traductor, avisando que el texto sale a internet */
-function conGoogle(texto, de, a) {
-  const largo = texto.length > MAX_ENLACE;
+/** Sin traductor en el teléfono: el texto no sale de la app, salvo que la persona lo pase a otra */
+function sinTraductor(texto, a) {
+  const pasar = navigator.share
+    ? el('button', { class: 'boton boton-primario', onclick: async () => {
+      try { await navigator.share({ text: texto }); } catch (e) { if (e.name !== 'AbortError') aviso('No se pudo compartir.', 'error'); }
+    } }, icono('compartir'), 'Compartir el texto')
+    : el('button', { class: 'boton boton-primario', onclick: async () => {
+      try { await navigator.clipboard.writeText(texto); aviso('Se copió el texto: pégalo en tu traductor.', 'exito', 5000); } catch (e) { aviso('No se pudo copiar.', 'error'); }
+    } }, icono('copiar'), 'Copiar el texto');
   return hoja(cerrar => [
     el('h2', { class: 'hoja-titulo', text: `Traducir al ${LENGUAS[a]}` }),
-    el('p', { class: 'hoja-detalle', text: 'Este teléfono no trae un traductor propio. Se puede traducir con Google Traductor: se abre en otra pestaña, necesita internet y el texto se envía a Google.' }),
-    largo && el('p', { class: 'hoja-detalle', text: 'Es un texto largo: se copia para que lo pegues en el traductor.' }),
+    el('p', { class: 'hoja-detalle', text: 'Este teléfono no trae un traductor que la app pueda usar, y ScanLibre no manda tu texto a internet.' }),
+    el('p', { class: 'hoja-detalle', text: 'Puedes pasarlo a la app de traductor que uses. Por ejemplo, Google Traductor traduce sin internet si bajas el idioma en esa app.' }),
     el('div', { class: 'hoja-botones' },
-      el('button', { class: 'boton boton-secundario', onclick: () => cerrar() }, 'Cancelar'),
-      el('button', { class: 'boton boton-primario', onclick: async () => {
-        if (largo) {
-          try { await navigator.clipboard.writeText(texto); aviso('Se copió el texto: pégalo en el traductor.', 'exito', 5000); } catch (e) {}
-        }
-        window.open(enlaceDeGoogle(texto, de, a), '_blank', 'noopener');
-        cerrar();
-      } }, icono('traducir'), 'Abrir Google Traductor'))
+      el('button', { class: 'boton boton-secundario', onclick: () => cerrar() }, 'Cerrar'),
+      pasar)
   ]);
 }

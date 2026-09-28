@@ -95,13 +95,6 @@ await esperar(600);
 await foto('5-pdf.png');
 await page.keyboard.press('Escape');
 
-// El respaldo en la nube
-await page.goto(srv.url);
-await page.waitForSelector('#vista-inicio:not([hidden])');
-await page.click('#inicio-menu');
-await page.click('.menu-opcion:has-text("Respaldo en la nube")');
-await esperar(600);
-await foto('6-nube.png');
 await ctx.close();
 
 // La cámara con la hoja marcada en vivo (un video falso hecho con una de las fotos)

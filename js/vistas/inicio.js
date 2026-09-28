@@ -14,8 +14,6 @@ import { elegirArchivos } from '../archivos.js';
 import { crearRespaldo, restaurarRespaldo } from '../respaldo.js';
 import { puedeCompartir, compartir, descargar } from '../exportar.js';
 import { mostrarPapelera, enPapelera } from './papelera.js';
-import { abrirNube } from './nube.js';
-import { configNube } from '../nube.js';
 
 let urls = [];
 const soltarUrls = () => { urls.forEach(u => URL.revokeObjectURL(u)); urls = []; };
@@ -278,8 +276,8 @@ function acercaDe() {
     el('div', { class: 'acerca' },
       el('p', { text: 'Escáner de documentos gratis para estudiantes. Sin marca de agua, sin anuncios y sin cuenta.' }),
       el('ul', {},
-        el('li', { text: 'Tus fotos se procesan aquí, en tu teléfono: no se suben a internet (salvo que actives el respaldo en la nube, y van cifradas).' }),
-        el('li', { text: 'Tus documentos se guardan en este navegador. Haz un respaldo en archivo de vez en cuando, o activa el respaldo en la nube (va cifrado: nadie más puede verlo).' }),
+        el('li', { text: 'Tus fotos y documentos se procesan y se guardan aquí, en tu teléfono: la app no sube nada a internet.' }),
+        el('li', { text: 'Haz un respaldo en archivo de vez en cuando y guárdalo donde quieras: si borras los datos del navegador o pierdes el teléfono, es tu copia.' }),
         el('li', { text: 'Funciona sin conexión después de abrirla una vez.' })),
       el('p', { text: 'El código está en github.com/scanlibre/scanlibre.github.io' }),
       el('p', {}, el('a', { href: 'privacidad.html', target: '_blank', rel: 'noopener', id: 'acerca-privacidad' }, 'Política de privacidad')),
@@ -305,13 +303,11 @@ export function iniciar() {
     const opcion = await menu([
       { valor: 'respaldar', texto: 'Respaldar todo en un archivo', icono: 'respaldo' },
       { valor: 'restaurar', texto: 'Restaurar un respaldo', icono: 'restaurar' },
-      { valor: 'nube', texto: configNube()?.codigo ? 'Respaldo en la nube (activado)' : 'Respaldo en la nube', icono: 'nube' },
       { valor: 'papelera', texto: enLaPapelera ? `Papelera (${enLaPapelera})` : 'Papelera', icono: 'basura' },
       { valor: 'acerca', texto: 'Acerca de ScanLibre', icono: 'info' }
     ]);
     try {
       if (opcion === 'papelera') await mostrarPapelera(() => mostrar());
-      else if (opcion === 'nube') await abrirNube({ alCambiar: () => mostrar() });
       else if (opcion === 'respaldar') await respaldar();
       else if (opcion === 'restaurar') await restaurar();
       else if (opcion === 'acerca') await acercaDe();

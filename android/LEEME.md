@@ -54,12 +54,10 @@ Se puede revisar con la [herramienta de Google](https://developers.google.com/di
 
 La app de Android no pide permisos propios: la cámara la pide Chrome, como en la web. Quien responde el formulario es quien publica. Esto es lo que hace la app:
 
-- **¿Recopila o comparte datos?** Solo si la persona activa el **respaldo en la nube**. En ese caso se suben sus documentos **cifrados de extremo a extremo** (nadie más que ella puede leerlos). Para ir a lo seguro, declarar:
-  - *Fotos y videos → Fotos* y *Archivos y documentos*: **recopilados**, opcional (el usuario decide), para **funcionalidad de la app** (respaldo), no se comparten con terceros.
-- **¿Se cifran en tránsito?** Sí (HTTPS, y además van cifrados desde el teléfono).
-- **¿Se pueden borrar?** Sí, desde la app: *Menú → Respaldo en la nube → Más opciones → Borrar mi respaldo de la nube*.
+- **¿Recopila o comparte datos?** **No.** ScanLibre no tiene servidor: las fotos y los documentos se procesan y se guardan en el teléfono, y la app no se conecta a ningún otro sitio. En el formulario: *No se recopilan ni se comparten datos del usuario*.
 - Sin anuncios, sin analítica, sin cuenta, sin ubicación, sin contactos.
-- Traducir con Google Traductor: se abre en el navegador solo si la persona lo elige y la app avisa antes. Es un enlace a otra app, no algo que ScanLibre recopile.
+- Compartir un PDF o un texto con otra app (WhatsApp, Drive, un traductor) lo decide la persona con el menú de compartir de Android: pasa a esa otra app dentro del teléfono y ScanLibre no lo manda a internet.
+- Hasta la versión 31 hubo un respaldo en la nube; se quitó antes de publicar, así que no hay nada que declarar por eso.
 
 ## Cambiar algo de la app de Android
 

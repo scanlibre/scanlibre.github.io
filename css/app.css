@@ -519,22 +519,6 @@ mark { background: var(--marca-suave); color: var(--texto); border-radius: 3px; 
   margin: 8px 0; padding: 10px 12px; border-radius: 12px; background: var(--fondo);
   font-size: 0.92rem; overflow-wrap: anywhere; white-space: pre-wrap; user-select: text; max-height: 40vh; overflow-y: auto;
 }
-.nube-lista { list-style: none; margin: 4px 0 8px; padding: 0; display: grid; gap: 10px; color: var(--texto-2); }
-.nube-lista li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; align-items: start; }
-.nube-lista .icono { width: 22px; height: 22px; color: var(--marca-fuerte); }
-.codigo-respaldo {
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 12px; margin: 10px 0 4px; padding: 14px 10px;
-  border-radius: 14px; background: var(--fondo); border: 1.5px dashed var(--borde);
-  font: 700 1.3rem/1.3 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; letter-spacing: 0.08em; user-select: all;
-}
-.nube-casilla { display: flex; gap: 10px; align-items: center; margin-top: 14px; font-weight: 600; }
-.nube-casilla input { width: 22px; height: 22px; accent-color: var(--marca); flex: none; }
-.nube-aviso { margin: 10px 0; padding: 12px 14px; border-radius: 14px; background: var(--marca-suave); }
-.nube-aviso p { margin: 0; }
-.nube-aviso .hoja-botones { margin-top: 12px; }
-.nube-error { margin: 8px 0; padding: 10px 12px; border-radius: 12px; background: var(--peligro-suave); color: var(--peligro); }
-.nube-nota { font-size: 0.86rem; margin-top: 12px; }
-.nube-mas { width: 100%; margin-top: 8px; }
 .etiqueta { display: grid; gap: 4px; margin-top: 10px; font-size: 0.86rem; font-weight: 650; color: var(--texto-2); }
 .etiqueta .campo { margin-top: 0; min-height: 46px; font-size: 1rem; font-weight: 400; color: var(--texto); }
 .campo::placeholder { color: var(--texto-2); opacity: 0.55; font-weight: 400; }
