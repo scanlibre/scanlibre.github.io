@@ -11,6 +11,7 @@ import { FILTROS } from '../imagen/filtros.js';
 import { cambiarAjuste } from '../ajustes.js';
 import { abrirRecorte } from './recorte.js';
 import { mostrarTexto } from './texto.js';
+import { editarPortada } from './portada.js';
 import { puedeCompartir, compartir, descargar } from '../exportar.js';
 
 let doc = null, pagina = null, n = 1, url = null, trabajando = false, turnoImagen = 0;
@@ -44,7 +45,7 @@ function pintar() {
   $('#pagina-borrosa').hidden = !esBorrosa(pagina);
   // Solo se muestra si hubo que enderezarla (o si se deshizo): en una hoja plana no dice nada
   // (las páginas de un PDF o de una cédula ya vienen listas: no se enderezan ni se buscan dedos)
-  const yaLista = pagina.modo === 'pdf' || pagina.modo === 'cedula';
+  const yaLista = pagina.modo === 'pdf' || pagina.modo === 'cedula' || pagina.modo === 'portada';
   const sinAplanar = pagina.aplanar === false;
   $('#pagina-curva').hidden = yaLista || (!pagina.aplanada && !sinAplanar);
   $('#pagina-curva-texto').textContent = sinAplanar ? 'Página sin enderezar.' : 'Se enderezaron los renglones curvos.';
@@ -52,6 +53,7 @@ function pintar() {
   // Igual con los dedos tapados
   const conDedos = pagina.dedos === false;
   $('#pagina-dedos').hidden = yaLista || (!pagina.sinDedos && !conDedos);
+  $('#pagina-portada').hidden = pagina.modo !== 'portada';
   $('#pagina-dedos-texto').textContent = conDedos ? 'Dedos sin tapar.' : 'Se taparon los dedos de los bordes.';
   $('#pagina-dedos-boton').textContent = conDedos ? 'Tapar' : 'Deshacer';
   return imagen;
@@ -306,6 +308,14 @@ export function iniciar() {
   $('#pagina-luz-cancelar').addEventListener('click', () => cerrarLuz());
   $('#pagina-luz-listo').addEventListener('click', listoLuz);
   $('#pagina-mas').addEventListener('click', masOpciones);
+  $('#pagina-portada-boton').addEventListener('click', async () => {
+    if (!pagina || trabajando) return;
+    const id = doc.id;
+    if (!await editarPortada(id)) return;
+    const d = await obtenerDocumento(id);
+    // Si se quitó, se vuelve al documento
+    if (d.paginas.includes(pagina.id)) mostrar({ doc: id, n }); else ir(`doc/${encodeURIComponent(id)}`, { reemplazar: true });
+  });
   $('#pagina-marcar').addEventListener('click', () => { if (pagina && !trabajando) ir(ruta('pagina', n, 'marcar')); });
   $('#pagina-texto').addEventListener('click', () => { if (pagina) mostrarTexto([pagina], { titulo: `Texto de la página ${n}`, nombre: `${doc.nombre} – página ${n}` }); });
   $('#pagina-borrar').addEventListener('click', borrar);

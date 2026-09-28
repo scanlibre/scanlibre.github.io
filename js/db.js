@@ -130,6 +130,25 @@ export async function insertarPaginaDespues(docId, despuesDe, pagina) {
   });
 }
 
+/** Guarda la página nueva en el lugar `indice` del documento (0 = la primera) */
+export async function insertarPaginaEn(docId, pagina, indice) {
+  const db = await abrir();
+  return new Promise((resolver, rechazar) => {
+    const tx = db.transaction(['documentos', 'paginas'], 'readwrite');
+    const docs = tx.objectStore('documentos');
+    docs.get(docId).onsuccess = e => {
+      const doc = e.target.result;
+      if (!doc) { tx.abort(); return; }
+      doc.paginas.splice(Math.max(0, Math.min(indice, doc.paginas.length)), 0, pagina.id);
+      doc.modificado = Date.now();
+      docs.put(doc);
+      tx.objectStore('paginas').put({ ...pagina, docId });
+    };
+    tx.oncomplete = () => resolver();
+    tx.onabort = tx.onerror = () => rechazar(tx.error || new Error('No se encontró el documento'));
+  });
+}
+
 export async function borrarPagina(docId, paginaId) {
   const db = await abrir();
   return new Promise((resolver, rechazar) => {

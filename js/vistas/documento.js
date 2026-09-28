@@ -9,6 +9,7 @@ import { ir, volver } from '../rutas.js';
 import { eventosPaginas, pendientesEnCola, importarArchivos, textoDePagina, esBorrosa, reprocesar, nuevoDocumento } from '../paginas.js';
 import { FILTROS } from '../imagen/filtros.js';
 import { mostrarTexto } from './texto.js';
+import { editarPortada } from './portada.js';
 import { nuevaSesion } from './camara.js';
 import { elegirArchivos } from '../archivos.js';
 import { ajustes, cambiarAjuste } from '../ajustes.js';
@@ -424,8 +425,10 @@ async function renombrar() {
 }
 
 async function masOpciones() {
+  const tienePortada = (await paginasDe(await obtenerDocumento(docId))).some(p => p.modo === 'portada');
   const opcion = await menu([
     { valor: 'texto', texto: 'Texto de todo el documento (copiar, escuchar, Word)', icono: 'texto' },
+    { valor: 'portada', texto: tienePortada ? 'Cambiar la portada' : 'Portada del trabajo', icono: 'portada' },
     { valor: 'elegir', texto: 'Elegir páginas (girar, pasar a otro documento…)', icono: 'listo' },
     { valor: 'unir', texto: 'Unir con otro documento', icono: 'mas' },
     { valor: 'renombrar', texto: 'Cambiar el nombre', icono: 'editar' },
@@ -435,6 +438,7 @@ async function masOpciones() {
   if (opcion === 'mover') return moverACarpeta();
   if (opcion === 'elegir') return entrarSeleccion();
   if (opcion === 'unir') return unirCon();
+  if (opcion === 'portada') { if (await editarPortada(docId)) pintar(); return; }
   if (opcion === 'texto') {
     const doc = await obtenerDocumento(docId);
     const paginas = await paginasDe(doc);

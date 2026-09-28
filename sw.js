@@ -3,7 +3,7 @@
 // cambios se sube VERSION (y el número de js/version.js): el navegador baja la
 // versión nueva y borra la vieja.
 
-const VERSION = 'scanlibre-v23';
+const VERSION = 'scanlibre-v24';
 // El lector de texto (unos 6 MB) no se baja al instalar: se guarda la primera vez
 // que se usa, en su propio caché, que no se borra al publicar versiones de la app
 const LECTOR = 'scanlibre-lector-v1';
@@ -32,6 +32,7 @@ const ARCHIVOS = [
   'js/marcas.js',
   'js/motor.js',
   'js/paginas.js',
+  'js/portada.js',
   'js/pdf.js',
   'js/respaldo.js',
   'js/rutas.js',
@@ -57,6 +58,7 @@ const ARCHIVOS = [
   'js/vistas/inicio.js',
   'js/vistas/marcar.js',
   'js/vistas/pagina.js',
+  'js/vistas/portada.js',
   'js/vistas/recorte.js',
   'js/vistas/texto.js'
 ];

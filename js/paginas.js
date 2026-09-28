@@ -12,6 +12,7 @@ import { ajustes } from './ajustes.js';
 import { dibujarMarcas, girarMarcas } from './marcas.js';
 import { hojaDeCedula } from './cedula.js';
 import { esPDF, abrirPDF } from './importar.js';
+import { dibujarPortada } from './portada.js';
 
 export const TODA_LA_FOTO = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }];
 
@@ -126,7 +127,7 @@ export async function reprocesar(pagina, cambios) {
   bitmap.close?.();
   // El texto leído ya no corresponde a la página nueva
   const nueva = { ...pagina, ...datos, ...r, ocr: null };
-  if (pagina.modo === 'cedula' || pagina.modo === 'pdf') nueva.nitidez = null;
+  if (['cedula', 'pdf', 'portada'].includes(pagina.modo)) nueva.nitidez = null;
   // El texto que traía el PDF sigue valiendo si la página no cambió de forma (otro filtro o brillo)
   const mismaForma = ['esquinas', 'rotacion', 'aplanar', 'dedos'].every(k => JSON.stringify(datos[k]) === JSON.stringify(k === 'aplanar' || k === 'dedos' ? pagina[k] !== false : pagina[k]))
     && r.procAncho === pagina.procAncho && r.procAlto === pagina.procAlto;
@@ -295,6 +296,31 @@ export async function importarPDF(docId, archivo, { pedirClave } = {}) {
   }
   listo();
   return pdf.paginas;
+}
+
+/**
+ * La portada como página (con su texto buscable). Con `anterior`, la
+ * reemplaza: mismo id, mismo lugar y sus marcas (por ejemplo, una firma).
+ */
+export async function paginaDePortada(campos, { tamano = ajustes().pdfTamano, anterior = null } = {}) {
+  let logo = null;
+  if (campos.logo) {
+    logo = new Image();
+    logo.src = campos.logo;
+    try { await logo.decode(); } catch (e) { logo = null; }
+  }
+  const { canvas, texto } = dibujarPortada({ ...campos, logo }, tamano === 'a4' ? 'a4' : 'carta');
+  let pagina;
+  try { pagina = { ...(await crearPaginaDeImagen(canvas, texto, 'portada')), portada: campos }; } finally { soltarCanvas(canvas); }
+  if (!anterior) return pagina;
+  const nueva = { ...pagina, id: anterior.id, docId: anterior.docId, creada: anterior.creada, marcas: anterior.marcas || [] };
+  nueva.ocr = { ...pagina.ocr, version: versionDe(nueva) };
+  if (nueva.marcas.length) {
+    const c = await lienzoConMarcas(nueva, 360);
+    nueva.miniatura = await canvasABlob(c, 'image/jpeg', 0.8);
+    soltarCanvas(c);
+  }
+  return nueva;
 }
 
 /**
