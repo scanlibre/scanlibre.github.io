@@ -37,7 +37,7 @@ describe('La cámara', () => {
     await page.click('#camara-listo');
     await page.click('#doc-atras');
     await page.click('#inicio-menu');
-    await page.click('.menu-opcion:nth-child(3)');
+    await page.click('.menu-opcion:has-text("Acerca de")');
     const texto = await page.textContent('.diagnostico');
     assert.match(texto, /última foto: \d+ × \d+ \((foto completa|cuadro del video)/);
     assert.match(texto, /video: 720 × 960/);

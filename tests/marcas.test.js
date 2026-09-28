@@ -216,12 +216,7 @@ describe('Marcar en la app', () => {
 
     // Al girar la página, las marcas giran con ella
     await page.click('#pagina-girar-der');
-    await page.waitForFunction(async () => {
-      const db = await new Promise(r => { const q = indexedDB.open('scanlibre'); q.onsuccess = () => r(q.result); });
-      const ps = await new Promise(r => { const q = db.transaction('paginas').objectStore('paginas').getAll(); q.onsuccess = () => r(q.result); });
-      db.close();
-      return ps[0].rotacion === 1;
-    }, null, { timeout: 30000 });
+    for (let i = 0; i < 60 && (await leerBase(page)).paginas[0].rotacion !== 1; i++) await page.waitForTimeout(500);
     await page.waitForSelector('#pagina-procesando', { state: 'hidden' });
     const giradas = await marcasDe(page);
     assert.ok(Math.abs(giradas[1].x - (1 - marcas[1].y)) < 1e-9 && Math.abs(giradas[1].y - marcas[1].x) < 1e-9);

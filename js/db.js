@@ -1,7 +1,7 @@
 // ScanLibre · db.js
 // Los documentos y sus páginas viven en IndexedDB, dentro del teléfono.
 //  carpetas:   { id, nombre, creada }
-//  documentos: { id, nombre, creado, modificado, paginas: [idPagina, ...], carpetaId }
+//  documentos: { id, nombre, creado, modificado, paginas: [idPagina, ...], carpetaId, papelera? }
 //  paginas:    { id, docId, original, ancho, alto, esquinas, filtro, rotacion,
 //                procesada, procAncho, procAlto, miniatura }  (original/procesada/miniatura son Blob)
 
@@ -38,9 +38,10 @@ async function tienda(nombre, modo = 'readonly') {
   return (await abrir()).transaction(nombre, modo).objectStore(nombre);
 }
 
-export async function listarDocumentos() {
+/** Los documentos, del más nuevo al más viejo (sin los que están en la papelera) */
+export async function listarDocumentos({ papelera = false } = {}) {
   const docs = await hecho((await tienda('documentos')).getAll());
-  return docs.sort((a, b) => b.modificado - a.modificado);
+  return docs.filter(d => papelera ? d.papelera : !d.papelera).sort((a, b) => b.modificado - a.modificado);
 }
 
 export async function obtenerDocumento(id) {
@@ -60,6 +61,101 @@ export async function obtenerPagina(id) {
 export async function guardarPagina(pagina) {
   await hecho((await tienda('paginas', 'readwrite')).put(pagina));
   return pagina;
+}
+
+// ── Papelera ────────────────────────────────────────────────────────
+// Lo que se borra queda 30 días: el documento con la fecha en `papelera`; la
+// página, fuera de la lista de su documento y con { cuando, lugar } para
+// volver a su lugar. Pasado ese tiempo se borra de verdad.
+export const DIAS_PAPELERA = 30;
+
+export async function documentoAPapelera(id) {
+  const doc = await obtenerDocumento(id);
+  if (doc) await guardarDocumento({ ...doc, papelera: Date.now() });
+}
+
+export async function recuperarDocumento(id) {
+  const doc = await obtenerDocumento(id);
+  if (!doc) return;
+  delete doc.papelera;
+  doc.modificado = Date.now();
+  await guardarDocumento(doc);
+}
+
+/** Las páginas salen del documento y van a la papelera (recuerdan su lugar) */
+export async function paginasAPapelera(docId, ids) {
+  const quitar = new Set(ids);
+  const db = await abrir();
+  return new Promise((resolver, rechazar) => {
+    const tx = db.transaction(['documentos', 'paginas'], 'readwrite');
+    const docs = tx.objectStore('documentos'), pags = tx.objectStore('paginas');
+    docs.get(docId).onsuccess = e => {
+      const doc = e.target.result;
+      if (!doc) return;
+      const cuando = Date.now();
+      doc.paginas.forEach((id, lugar) => {
+        if (quitar.has(id)) pags.get(id).onsuccess = e2 => { if (e2.target.result) pags.put({ ...e2.target.result, papelera: { cuando, lugar } }); };
+      });
+      doc.paginas = doc.paginas.filter(p => !quitar.has(p));
+      doc.modificado = cuando;
+      docs.put(doc);
+    };
+    tx.oncomplete = () => resolver();
+    tx.onerror = () => rechazar(tx.error);
+  });
+}
+
+/** La página vuelve a su documento, en su lugar (o al final si el documento ya es más corto) */
+export async function recuperarPagina(id) {
+  const db = await abrir();
+  return new Promise((resolver, rechazar) => {
+    const tx = db.transaction(['documentos', 'paginas'], 'readwrite');
+    const docs = tx.objectStore('documentos'), pags = tx.objectStore('paginas');
+    pags.get(id).onsuccess = e => {
+      const p = e.target.result;
+      if (!p?.papelera) return;
+      docs.get(p.docId).onsuccess = e2 => {
+        const doc = e2.target.result;
+        if (!doc) return;
+        if (!doc.paginas.includes(id)) doc.paginas.splice(Math.min(p.papelera.lugar ?? doc.paginas.length, doc.paginas.length), 0, id);
+        doc.modificado = Date.now();
+        docs.put(doc);
+        const { papelera, ...limpia } = p;
+        pags.put(limpia);
+      };
+    };
+    tx.oncomplete = () => resolver();
+    tx.onerror = () => rechazar(tx.error);
+  });
+}
+
+/** Lo que hay en la papelera: documentos y páginas sueltas (de documentos que no están en ella) */
+export async function listarPapelera() {
+  const [docs, pags] = await Promise.all([hecho((await tienda('documentos')).getAll()), hecho((await tienda('paginas')).getAll())]);
+  const porId = new Map(docs.map(d => [d.id, d]));
+  return {
+    documentos: docs.filter(d => d.papelera).sort((a, b) => b.papelera - a.papelera),
+    paginas: pags.filter(p => p.papelera && porId.get(p.docId) && !porId.get(p.docId).papelera)
+      .sort((a, b) => b.papelera.cuando - a.papelera.cuando)
+      .map(p => ({ ...p, documento: porId.get(p.docId) }))
+  };
+}
+
+export async function borrarPaginaDePapelera(id) {
+  await hecho((await tienda('paginas', 'readwrite')).delete(id));
+}
+
+/**
+ * Borra de verdad lo que lleva más de 30 días en la papelera (o todo, con `todo`).
+ * @returns cuántas cosas se borraron
+ */
+export async function vaciarPapelera({ todo = false, ahora = Date.now() } = {}) {
+  const limite = ahora - DIAS_PAPELERA * 86400000;
+  const { documentos, paginas } = await listarPapelera();
+  let n = 0;
+  for (const d of documentos) if (todo || d.papelera < limite) { await borrarDocumento(d.id); n++; }
+  for (const p of paginas) if (todo || p.papelera.cuando < limite) { await borrarPaginaDePapelera(p.id); n++; }
+  return n;
 }
 
 /** Todas las páginas de todos los documentos (para buscar) */

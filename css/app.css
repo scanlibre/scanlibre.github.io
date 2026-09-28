@@ -498,6 +498,11 @@ mark { background: var(--marca-suave); color: var(--texto); border-radius: 3px; 
 .herramientas-oscuras .herramienta:hover:not(:disabled) { background: rgb(255 255 255 / 0.1); }
 .herramienta[aria-pressed="true"] { background: rgb(45 212 191 / 0.18); }
 .herramienta[aria-pressed="true"] .icono, .herramienta[aria-pressed="true"] span { color: var(--marca); }
+.papelera { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 4px 0; }
+.papelera-fila { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 14px; background: var(--fondo); }
+.papelera-fila .doc-miniatura { width: 44px; height: 56px; }
+.papelera-recuperar { color: var(--marca-fuerte); background: var(--marca-suave); }
+.papelera-borrar { color: var(--texto-2); }
 .etiqueta { display: grid; gap: 4px; margin-top: 10px; font-size: 0.86rem; font-weight: 650; color: var(--texto-2); }
 .etiqueta .campo { margin-top: 0; min-height: 46px; font-size: 1rem; font-weight: 400; color: var(--texto); }
 .campo::placeholder { color: var(--texto-2); opacity: 0.55; font-weight: 400; }
@@ -570,6 +575,9 @@ mark { background: var(--marca-suave); color: var(--texto); border-radius: 3px; 
 .opcion small { color: var(--texto-2); font-size: 0.82rem; }
 .opcion[aria-pressed="true"] { border-color: var(--marca); background: var(--marca-suave); }
 
+.campo-marca { display: grid; gap: 8px; margin-top: 8px; }
+.campo-marca .campo { margin: 0; }
+.campo-marca .filtro { justify-self: start; padding: 0 14px; }
 .megas { display: flex; gap: 6px; margin-top: 8px; }
 .megas .filtro { flex: 1; }
 .progreso { height: 8px; border-radius: 4px; background: var(--superficie-2); overflow: hidden; margin: 14px 0 6px; }
@@ -606,6 +614,11 @@ mark { background: var(--marca-suave); color: var(--texto); border-radius: 3px; 
   opacity: 0; transform: translateY(10px); transition: opacity 0.2s, transform 0.2s;
 }
 .aviso.visible { opacity: 1; transform: none; }
+.aviso { display: flex; align-items: center; gap: 12px; }
+.aviso-accion {
+  pointer-events: auto; flex: none; margin: -6px -8px -6px 0; padding: 8px 10px; border: 0; border-radius: 10px;
+  background: rgb(255 255 255 / 0.14); color: #5eead4; font: inherit; font-weight: 800; cursor: pointer;
+}
 .aviso-error { background: #b42318; }
 .aviso-exito { background: #0f766e; }
 

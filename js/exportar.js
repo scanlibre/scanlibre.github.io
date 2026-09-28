@@ -3,7 +3,7 @@
 
 import { crearPDF, crearPDFConContrasena, aBits } from './pdf.js';
 import { abrirFoto, aCanvas, canvasABlob } from './fotos.js';
-import { dibujarMarcas } from './marcas.js';
+import { dibujarMarcas, dibujarMarcaDeAgua } from './marcas.js';
 
 export const CALIDADES = {
   liviana: { texto: 'Liviana', detalle: 'Para subir a plataformas', maxLado: 1650, jpeg: 0.62 },
@@ -23,7 +23,7 @@ async function comprimir(bytes) {
 }
 
 /** Las páginas listas para el PDF (imagen y texto) con esa resolución y calidad de JPEG */
-async function partesDe(paginas, { maxLado, jpeg }, conTexto, alAvanzar) {
+async function partesDe(paginas, { maxLado, jpeg }, conTexto, alAvanzar, marcaDeAgua = '') {
   const partes = [];
   for (let i = 0; i < paginas.length; i++) {
     alAvanzar?.(i, paginas.length);
@@ -32,8 +32,10 @@ async function partesDe(paginas, { maxLado, jpeg }, conTexto, alAvanzar) {
     const c = aCanvas(bmp, maxLado);
     bmp.close?.();
     // Resaltador, notas y firma encima de la página (con color: la página va en JPEG aunque sea B/N)
-    const conMarcas = p.marcas?.length > 0;
-    if (conMarcas) dibujarMarcas(c.getContext('2d'), p.marcas, c.width, c.height);
+    const conMarcas = p.marcas?.length > 0 || !!marcaDeAgua;
+    if (p.marcas?.length) dibujarMarcas(c.getContext('2d'), p.marcas, c.width, c.height);
+    // La marca de agua va dentro de la imagen: no se puede quitar del PDF
+    if (marcaDeAgua) dibujarMarcaDeAgua(c.getContext('2d'), marcaDeAgua, c.width, c.height);
     if (p.filtro === 'bn' && !conMarcas && typeof CompressionStream !== 'undefined') {
       const img = c.getContext('2d').getImageData(0, 0, c.width, c.height);
       partes.push({ tipo: 'bits', bytes: await comprimir(aBits(img)), ancho: c.width, alto: c.height });
@@ -57,8 +59,8 @@ const armarBytes = (partes, opciones, contrasena) => contrasena ? crearPDFConCon
  * @param alAvanzar (hechas, total) para mostrar el avance
  * @returns Blob del PDF
  */
-export async function generarPDF(doc, paginas, { tamano = 'carta', calidad = 'normal', conTexto = false, contrasena = '', porHoja = 1 } = {}, alAvanzar) {
-  const partes = await partesDe(paginas, CALIDADES[calidad] || CALIDADES.normal, conTexto, alAvanzar);
+export async function generarPDF(doc, paginas, { tamano = 'carta', calidad = 'normal', conTexto = false, contrasena = '', porHoja = 1, marcaDeAgua = '' } = {}, alAvanzar) {
+  const partes = await partesDe(paginas, CALIDADES[calidad] || CALIDADES.normal, conTexto, alAvanzar, marcaDeAgua);
   const bytes = await armarBytes(partes, { tamano, titulo: doc.nombre, porHoja }, contrasena);
   return new Blob([bytes], { type: 'application/pdf' });
 }
@@ -80,13 +82,13 @@ const pesoRelativo = (a, b) => ((a.maxLado / b.maxLado) ** 2) * PESO_CALIDAD(a.j
  * @param alAvanzar (hechas, total, { intento })
  * @returns { blob, escalon, excedido } (excedido: ni lo más liviano cupo)
  */
-export async function generarPDFConLimite(doc, paginas, { limite, tamano = 'carta', conTexto = false, contrasena = '', porHoja = 1 }, alAvanzar) {
+export async function generarPDFConLimite(doc, paginas, { limite, tamano = 'carta', conTexto = false, contrasena = '', porHoja = 1, marcaDeAgua = '' }, alAvanzar) {
   const opciones = { tamano, titulo: doc.nombre, porHoja };
   const meta = limite * 0.97; // un poco de aire (el cifrado y los datos suman unos bytes)
   let i = 1, intento = 0;
   const probar = async k => {
     intento++;
-    const partes = await partesDe(paginas, ESCALONES[k], conTexto, (h, t) => alAvanzar?.(h, t, { intento }));
+    const partes = await partesDe(paginas, ESCALONES[k], conTexto, (h, t) => alAvanzar?.(h, t, { intento }), marcaDeAgua);
     return { partes, peso: crearPDF(partes, opciones).length };
   };
   let r = await probar(i);

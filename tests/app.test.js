@@ -149,8 +149,10 @@ describe('La app', () => {
     await page.waitForFunction(() => document.querySelector('#pagina-titulo').textContent === 'Página 2 de 2');
     const { documentos, paginas } = await leerBase(page);
     assert.deepEqual(documentos[0].paginas, [antes[1], antes[2]]);
-    assert.deepEqual(paginas.map(p => p.id).sort(), [antes[1], antes[2]].sort(), 'solo se borró esa página');
-    assert.ok(paginas.every(p => p.procesada > 1000 && p.original > 1000), 'las demás conservan sus imágenes');
+    const vivas = paginas.filter(p => !p.papelera);
+    assert.deepEqual(vivas.map(p => p.id).sort(), [antes[1], antes[2]].sort(), 'solo se borró esa página');
+    assert.equal(paginas.find(p => p.papelera)?.id, antes[0], 'la borrada queda en la papelera');
+    assert.ok(vivas.every(p => p.procesada > 1000 && p.original > 1000), 'las demás conservan sus imágenes');
   });
 
   it('una página curva se endereza sola, y se puede deshacer', async () => {
@@ -187,16 +189,17 @@ describe('La app', () => {
     assert.equal((await leerBase(page)).documentos[0].nombre, 'Tarea de Cálculo');
   });
 
-  it('eliminar un documento pide confirmación y lo borra con sus páginas', async () => {
+  it('eliminar un documento pide confirmación y lo manda a la papelera', async () => {
     const page = await env.pagina();
     await importarFoto(page, foto1.ruta, foto2.ruta);
     await page.click('#doc-menu');
     await page.click('.menu-opcion.peligro');
     await page.click('dialog .boton-peligro');
     await page.waitForSelector('#vista-inicio:not([hidden])');
+    assert.equal(await page.locator('#inicio-lista li').count(), 0, 'ya no se ve en la lista');
     const { documentos, paginas } = await leerBase(page);
-    assert.equal(documentos.length, 0);
-    assert.equal(paginas.length, 0);
+    assert.ok(documentos[0].papelera > 0, 'queda en la papelera');
+    assert.equal(paginas.length, 2, 'con sus páginas, para recuperarlo');
   });
 
   it('el respaldo se puede restaurar (por ejemplo, en otro teléfono)', async () => {

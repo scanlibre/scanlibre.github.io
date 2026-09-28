@@ -82,7 +82,7 @@ describe('Brillo y contraste en la app', () => {
     await page.locator('#pagina-contraste').fill('25');
     assert.equal(await page.textContent('#pagina-brillo-valor'), '-40');
     assert.equal(await page.textContent('#pagina-contraste-valor'), '+25');
-    await page.waitForFunction(async ini => {
+    await page.waitForFunction(ini => {
       const c = document.querySelector('#pagina-previa');
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
       let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i];

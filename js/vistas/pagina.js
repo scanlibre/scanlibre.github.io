@@ -1,14 +1,15 @@
 // ScanLibre · vistas/pagina.js
 // Una página: filtros, brillo, girar, recortar de nuevo, marcarla, moverla, guardarla o borrarla.
 
-import { $, el, aviso, confirmar, nombreArchivo, menu, pedirTexto } from '../util.js';
-import { obtenerDocumento, guardarDocumento, obtenerPagina, borrarPagina, moverPaginas } from '../db.js';
+import { $, el, aviso, confirmar, nombreArchivo, menu, pedirTexto, hoyCorto } from '../util.js';
+import { dibujarMarcaDeAgua } from '../marcas.js';
+import { obtenerDocumento, guardarDocumento, obtenerPagina, moverPaginas, paginasAPapelera, recuperarPagina, DIAS_PAPELERA } from '../db.js';
 import { ir, volver } from '../rutas.js';
 import { reprocesar, esBorrosa, separarLibro, baseParaLuz, conLuz, lienzoConMarcas, nuevoDocumento } from '../paginas.js';
 import { nuevaSesion } from './camara.js';
 import { abrirFoto, canvasABlob, soltarCanvas } from '../fotos.js';
 import { FILTROS } from '../imagen/filtros.js';
-import { cambiarAjuste } from '../ajustes.js';
+import { ajustes, cambiarAjuste } from '../ajustes.js';
 import { abrirRecorte } from './recorte.js';
 import { mostrarTexto } from './texto.js';
 import { editarPortada } from './portada.js';
@@ -20,7 +21,7 @@ const ruta = (...partes) => ['doc', encodeURIComponent(doc.id), ...partes].join(
 
 export async function mostrar(params) {
   doc = await obtenerDocumento(params.doc);
-  if (!doc) return ir('', { reemplazar: true });
+  if (!doc || doc.papelera) return ir('', { reemplazar: true });
   if (!doc.paginas.length) return ir(ruta(), { reemplazar: true });
   n = Math.min(params.n, doc.paginas.length);
   pagina = await obtenerPagina(doc.paginas[n - 1]);
@@ -203,11 +204,22 @@ async function recortar() {
   });
 }
 
-async function guardarImagen() {
+async function guardarImagen({ conMarcaDeAgua = false } = {}) {
+  let marca = '';
+  if (conMarcaDeAgua) {
+    const texto = await pedirTexto('Marca de agua', ajustes().marcaDeAgua || '', {
+      aceptar: 'Guardar imagen', ejemplo: 'Por ejemplo: Solo para trámite en el banco',
+      detalle: `Va cruzada sobre toda la página, con la fecha de hoy (${hoyCorto()}).`
+    });
+    if (!texto) return;
+    cambiarAjuste('marcaDeAgua', texto);
+    marca = `${texto} · ${hoyCorto()}`;
+  }
   let blob = pagina.procesada;
-  // Con las marcas: la página entera con ellas encima
-  if (pagina.marcas?.length) {
+  // Con las marcas (y la marca de agua): la página entera con ellas encima
+  if (pagina.marcas?.length || marca) {
     const c = await lienzoConMarcas(pagina);
+    if (marca) dibujarMarcaDeAgua(c.getContext('2d'), marca, c.width, c.height);
     blob = await canvasABlob(c, 'image/jpeg', 0.92);
     soltarCanvas(c);
   }
@@ -220,11 +232,16 @@ async function guardarImagen() {
 }
 
 async function borrar() {
-  const si = await confirmar(`¿Eliminar la página ${n}?`, { detalle: 'Las demás páginas quedan como están.', aceptar: 'Eliminar', peligro: true });
+  const si = await confirmar(`¿Eliminar la página ${n}?`, { detalle: `Las demás páginas quedan como están. Esta queda ${DIAS_PAPELERA} días en la papelera.`, aceptar: 'Eliminar', peligro: true });
   if (!si) return;
-  await borrarPagina(doc.id, pagina.id);
+  const { id: docId } = doc, { id } = pagina, numero = n;
+  await paginasAPapelera(docId, [id]);
   const quedan = doc.paginas.length - 1;
-  aviso('Página eliminada.');
+  aviso('Página eliminada.', 'info', 6000, { accion: { texto: 'Deshacer', alTocar: async () => {
+    await recuperarPagina(id);
+    aviso('Listo: la página volvió a su lugar.', 'exito');
+    ir(`doc/${encodeURIComponent(docId)}/pagina/${numero}`, { reemplazar: true });
+  } } });
   if (!quedan) volver(ruta());
   else ir(ruta('pagina', Math.min(n, quedan)), { reemplazar: true });
 }
@@ -251,13 +268,15 @@ async function masOpciones() {
     n < total && { valor: 'despues', texto: 'Mover una página después', icono: 'despues' },
     { valor: 'separar', texto: 'Libro abierto: separar en dos páginas', icono: 'libro' },
     n > 1 && { valor: 'dividir', texto: `Dividir aquí: de la página ${n} en adelante, un documento nuevo`, icono: 'pdf' },
-    { valor: 'imagen', texto: 'Guardar como imagen', icono: 'descargar' }
+    { valor: 'imagen', texto: 'Guardar como imagen', icono: 'descargar' },
+    { valor: 'imagen-marca', texto: 'Guardar como imagen con marca de agua', icono: 'descargar' }
   ].filter(Boolean), `Página ${n}`);
   if (opcion === 'antes') mover(-1);
   else if (opcion === 'despues') mover(1);
   else if (opcion === 'separar') separar();
   else if (opcion === 'dividir') dividir();
   else if (opcion === 'imagen') guardarImagen();
+  else if (opcion === 'imagen-marca') guardarImagen({ conMarcaDeAgua: true });
 }
 
 // Libro abierto en una sola página: se separa en dos (la derecha queda después)

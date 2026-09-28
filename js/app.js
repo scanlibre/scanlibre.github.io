@@ -4,6 +4,7 @@
 import { registrarVistas, iniciarRutas } from './rutas.js';
 import { aviso } from './util.js';
 import { eventosPaginas, colaVacia } from './paginas.js';
+import { vaciarPapelera } from './db.js';
 import * as inicio from './vistas/inicio.js';
 import * as camara from './vistas/camara.js';
 import * as recorte from './vistas/recorte.js';
@@ -18,6 +19,9 @@ registrarVistas(vistas);
 eventosPaginas.addEventListener('error', e => aviso(e.detail?.pdf ? `No se pudo abrir el PDF: ${e.detail.error?.message || e.detail.error}` : 'No se pudo procesar una de las páginas.', 'error', 6000));
 
 iniciarRutas();
+
+// Lo que lleva más de 30 días en la papelera se borra de verdad (un rato después de abrir, sin apuro)
+setTimeout(() => vaciarPapelera().catch(e => console.warn('Papelera:', e)), 4000);
 
 // Modo sin conexión (el navegador solo lo permite en https o en la propia computadora)
 const seguro = location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname);

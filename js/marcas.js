@@ -130,6 +130,36 @@ export function dibujarMarcas(ctx, marcas, W, H) {
   }
 }
 
+/**
+ * Marca de agua: el texto cruzado en diagonal y repetido por toda la página,
+ * para que una copia (de la cédula, por ejemplo) solo sirva para lo que dice.
+ * Va con un borde claro y relleno oscuro semitransparentes: se ve sobre el
+ * papel blanco y sobre una foto oscura, y lo de abajo se sigue leyendo.
+ */
+export function dibujarMarcaDeAgua(ctx, texto, W, H) {
+  const t = String(texto || '').trim();
+  if (!t) return;
+  const tam = Math.max(12, Math.round(Math.min(W, H) * 0.042));
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.rotate(-Math.PI / 6);
+  ctx.font = `700 ${tam}px ${FUENTE}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  const paso = ctx.measureText(t).width + tam * 2.5, alto = tam * 3.4, D = Math.hypot(W, H) / 2 + paso;
+  for (let y = -D, fila = 0; y <= D; y += alto, fila++) {
+    for (let x = -D + (fila % 2 ? paso / 2 : 0); x <= D; x += paso) {
+      ctx.lineWidth = Math.max(1, tam * 0.09);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.strokeText(t, x, y);
+      ctx.fillStyle = 'rgba(35, 35, 40, 0.32)';
+      ctx.fillText(t, x, y);
+    }
+  }
+  ctx.restore();
+}
+
 const distSegmento = (px, py, ax, ay, bx, by) => {
   const dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy;
   const t = l ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l)) : 0;

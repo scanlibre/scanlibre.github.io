@@ -51,6 +51,12 @@ export function nombrePorDefecto(d = new Date()) {
   return `Escaneo ${d.getDate()} ${mes} ${d.getFullYear()} ${p(d.getHours())}.${p(d.getMinutes())}`;
 }
 
+/** "28/09/2026": para la marca de agua */
+export function hoyCorto(d = new Date()) {
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
 /** "27 sept": para el nombre de los documentos de una carpeta */
 export function fechaDeClase(d = new Date()) {
   return `${d.getDate()} ${new Intl.DateTimeFormat('es-HN', { month: 'short' }).format(d).replace('.', '')}`;
@@ -73,12 +79,15 @@ export function paginasTexto(n) {
 }
 
 // ── Avisos cortos abajo de la pantalla ──────────────────────────────
-export function aviso(mensaje, tipo = 'info', ms = 3200) {
+/** @param accion { texto, alTocar } un botón en el aviso (por ejemplo, "Deshacer") */
+export function aviso(mensaje, tipo = 'info', ms = 3200, { accion } = {}) {
   const caja = $('#avisos');
-  const a = el('div', { class: `aviso aviso-${tipo}`, role: tipo === 'error' ? 'alert' : 'status' }, mensaje);
+  const quitar = () => { a.classList.remove('visible'); setTimeout(() => a.remove(), 300); };
+  const a = el('div', { class: `aviso aviso-${tipo}`, role: tipo === 'error' ? 'alert' : 'status' }, el('span', { text: mensaje }),
+    accion && el('button', { class: 'aviso-accion', onclick: () => { quitar(); accion.alTocar(); } }, accion.texto));
   caja.append(a);
   requestAnimationFrame(() => a.classList.add('visible'));
-  setTimeout(() => { a.classList.remove('visible'); setTimeout(() => a.remove(), 300); }, ms);
+  setTimeout(quitar, accion ? Math.max(ms, 6000) : ms);
 }
 
 // ── Diálogos ────────────────────────────────────────────────────────

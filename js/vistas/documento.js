@@ -3,8 +3,8 @@
 // varias (girar, filtro, pasarlas a otro documento, PDF o eliminar),
 // renombrar y crear el PDF.
 
-import { $, el, icono, aviso, confirmar, pedirTexto, menu, hoja, paginasTexto, fechaCorta, tamanoLegible, nombreArchivo, nuevoId, pedirClaveDePDF } from '../util.js';
-import { obtenerDocumento, guardarDocumento, paginasDe, borrarDocumento, listarCarpetas, guardarCarpeta, listarDocumentos, borrarPaginas, moverPaginas } from '../db.js';
+import { $, el, icono, aviso, confirmar, pedirTexto, menu, hoja, paginasTexto, fechaCorta, tamanoLegible, nombreArchivo, nuevoId, pedirClaveDePDF, hoyCorto } from '../util.js';
+import { obtenerDocumento, guardarDocumento, paginasDe, borrarDocumento, listarCarpetas, guardarCarpeta, listarDocumentos, moverPaginas, documentoAPapelera, recuperarDocumento, paginasAPapelera, recuperarPagina, DIAS_PAPELERA } from '../db.js';
 import { ir, volver } from '../rutas.js';
 import { eventosPaginas, pendientesEnCola, importarArchivos, textoDePagina, esBorrosa, reprocesar, nuevoDocumento } from '../paginas.js';
 import { FILTROS } from '../imagen/filtros.js';
@@ -51,8 +51,8 @@ function alCambiar(e) {
 async function pintar() {
   if (agarre?.arrastrando) { repintar = true; return; }
   const doc = await obtenerDocumento(docId);
-  if (!doc) {
-    aviso('Ese documento ya no existe.');
+  if (!doc || doc.papelera) {
+    aviso(doc ? 'Ese documento está en la papelera.' : 'Ese documento ya no existe.');
     return ir('', { reemplazar: true });
   }
   const paginas = await paginasDe(doc);
@@ -205,11 +205,16 @@ async function pasarElegidas() {
 async function borrarElegidas() {
   const { ids } = await elegidas();
   if (!ids.length) return;
-  const si = await confirmar(ids.length === 1 ? '¿Eliminar la página elegida?' : `¿Eliminar ${ids.length} páginas?`, { detalle: 'Las demás páginas quedan como están. No se puede deshacer.', aceptar: 'Eliminar', peligro: true });
+  const si = await confirmar(ids.length === 1 ? '¿Eliminar la página elegida?' : `¿Eliminar ${ids.length} páginas?`, { detalle: `Las demás páginas quedan como están. Las eliminadas quedan ${DIAS_PAPELERA} días en la papelera.`, aceptar: 'Eliminar', peligro: true });
   if (!si) return;
-  await borrarPaginas(docId, ids);
+  await paginasAPapelera(docId, ids);
   salirSeleccion();
-  aviso(ids.length === 1 ? 'Página eliminada.' : `${ids.length} páginas eliminadas.`);
+  const este = docId;
+  aviso(ids.length === 1 ? 'Página eliminada.' : `${ids.length} páginas eliminadas.`, 'info', 6000, { accion: { texto: 'Deshacer', alTocar: async () => {
+    for (const id of ids) await recuperarPagina(id); // en orden: cada una vuelve a su lugar
+    aviso('Listo: volvieron a su lugar.', 'exito');
+    if (docId === este) pintar();
+  } } });
   pintar();
 }
 
@@ -462,10 +467,15 @@ async function masOpciones() {
   if (opcion === 'renombrar') return renombrar();
   if (opcion === 'borrar') {
     const doc = await obtenerDocumento(docId);
-    const si = await confirmar('¿Eliminar este documento?', { detalle: `"${doc.nombre}" y sus ${paginasTexto(doc.paginas.length)} se borran de este teléfono. No se puede deshacer.`, aceptar: 'Eliminar', peligro: true });
+    const si = await confirmar('¿Eliminar este documento?', { detalle: `"${doc.nombre}" queda ${DIAS_PAPELERA} días en la papelera (menú del inicio): ahí lo puedes recuperar.`, aceptar: 'Eliminar', peligro: true });
     if (!si) return;
-    await borrarDocumento(docId);
-    aviso('Documento eliminado.');
+    const id = docId;
+    await documentoAPapelera(id);
+    aviso('Documento en la papelera.', 'info', 6000, { accion: { texto: 'Deshacer', alTocar: async () => {
+      await recuperarDocumento(id);
+      aviso('Listo: se recuperó el documento.', 'exito');
+      ir('doc/' + encodeURIComponent(id));
+    } } });
     volver('');
   }
 }
@@ -519,6 +529,24 @@ async function crearPDF({ soloIds = null, nombre: nombrePDF = null } = {}) {
     } },
       el('strong', { text: 'Con contraseña' }),
       el('small', { text: 'Para abrirlo hay que escribirla (cifrado AES-256). Si la olvidas, no hay forma de recuperarla.' }));
+    // Marca de agua: un texto cruzado en cada página (se recuerda el último)
+    const textoMarca = el('input', { class: 'campo', type: 'text', maxlength: 60, 'aria-label': 'Texto de la marca de agua', placeholder: 'Por ejemplo: Solo para trámite en el banco', enterkeyhint: 'done' });
+    textoMarca.value = ajustes().marcaDeAgua || '';
+    let conFecha = ajustes().marcaConFecha !== false;
+    const fecha = el('button', { class: 'filtro', 'aria-pressed': String(conFecha), onclick: () => {
+      conFecha = !conFecha;
+      fecha.setAttribute('aria-pressed', String(conFecha));
+    } }, `Con la fecha de hoy (${hoyCorto()})`);
+    const campoMarca = el('div', { class: 'campo-marca', hidden: true }, textoMarca, fecha);
+    const hayCedula = paginas.some(p => p.modo === 'cedula');
+    const conMarca = el('button', { class: 'opcion', 'aria-pressed': 'false', onclick: () => {
+      const si = conMarca.getAttribute('aria-pressed') !== 'true';
+      conMarca.setAttribute('aria-pressed', String(si));
+      campoMarca.hidden = !si;
+      if (si) textoMarca.focus();
+    } },
+      el('strong', { text: 'Marca de agua' }),
+      el('small', { text: 'Un texto cruzado sobre cada página, para que la copia solo sirva para lo que tú digas. No se puede quitar del PDF.' + (hayCedula ? ' Recomendado: aquí hay una cédula.' : '') }));
     const barra = el('span');
     const progreso = el('div', { class: 'progreso', hidden: true }, barra);
     const estado = el('p', { class: 'hoja-detalle', hidden: true, 'aria-live': 'polite' });
@@ -528,6 +556,10 @@ async function crearPDF({ soloIds = null, nombre: nombrePDF = null } = {}) {
       const conContrasena = conClave.getAttribute('aria-pressed') === 'true';
       const contrasena = conContrasena ? clave.value : '';
       if (conContrasena && !contrasena) { aviso('Escribe la contraseña del PDF.', 'error'); clave.focus(); return; }
+      const conMarcaDeAgua = conMarca.getAttribute('aria-pressed') === 'true';
+      if (conMarcaDeAgua && !textoMarca.value.trim()) { aviso('Escribe el texto de la marca de agua.', 'error'); textoMarca.focus(); return; }
+      const marcaDeAgua = conMarcaDeAgua ? textoMarca.value.trim() + (conFecha ? ` · ${hoyCorto()}` : '') : '';
+      if (conMarcaDeAgua) { cambiarAjuste('marcaDeAgua', textoMarca.value.trim()); cambiarAjuste('marcaConFecha', conFecha); }
       crear.disabled = true;
       progreso.hidden = false;
       cambiarAjuste('pdfTamano', eleccion.tamano);
@@ -555,7 +587,7 @@ async function crearPDF({ soloIds = null, nombre: nombrePDF = null } = {}) {
           estado.textContent = 'Armando el PDF…';
         }
         const datos = { ...doc, nombre: nombrePDF || doc.nombre };
-        const comun = { tamano: eleccion.tamano, conTexto: eleccion.texto, contrasena, porHoja: Number(eleccion.porHoja) };
+        const comun = { tamano: eleccion.tamano, conTexto: eleccion.texto, contrasena, porHoja: Number(eleccion.porHoja), marcaDeAgua };
         let blob, excedido = false;
         if (eleccion.calidad === 'limite') {
           // Los megas de las plataformas suelen ser de 1 000 000 bytes: así cabe en todas
@@ -576,7 +608,7 @@ async function crearPDF({ soloIds = null, nombre: nombrePDF = null } = {}) {
         opciones.hidden = true;
         resultado.replaceChildren(
           el('div', { class: 'resultado-pdf' }, icono('pdf'),
-            el('div', {}, el('strong', { text: nombre }), el('small', { text: [paginasTexto(paginas.length), tamanoLegible(blob.size), eleccion.calidad === 'limite' && !excedido && `menos de ${eleccion.limite} MB`, Number(eleccion.porHoja) > 1 && `${eleccion.porHoja} por hoja`, contrasena && 'con contraseña'].filter(Boolean).join(' · ') }))),
+            el('div', {}, el('strong', { text: nombre }), el('small', { text: [paginasTexto(paginas.length), tamanoLegible(blob.size), eleccion.calidad === 'limite' && !excedido && `menos de ${eleccion.limite} MB`, Number(eleccion.porHoja) > 1 && `${eleccion.porHoja} por hoja`, marcaDeAgua && 'con marca de agua', contrasena && 'con contraseña'].filter(Boolean).join(' · ') }))),
           el('div', { class: 'hoja-botones' },
             el('button', { class: 'boton boton-secundario', onclick: () => { descargar(blob, nombre); aviso('PDF descargado.', 'exito'); } }, icono('descargar'), 'Descargar'),
             puedeCompartir(blob, nombre) && el('button', { class: 'boton boton-primario', onclick: async () => {
@@ -603,6 +635,7 @@ async function crearPDF({ soloIds = null, nombre: nombrePDF = null } = {}) {
       grupo('Calidad', 'calidad', calidades, false, valor => { filaMegas.hidden = valor !== 'limite'; }),
       filaMegas,
       el('div', { class: 'grupo' }, el('h3', { class: 'grupo-titulo', text: 'Texto' }), el('div', { class: 'opciones' }, conTexto)),
+      el('div', { class: 'grupo' }, el('h3', { class: 'grupo-titulo', text: 'Marca de agua' }), el('div', { class: 'opciones' }, conMarca), campoMarca),
       el('div', { class: 'grupo' }, el('h3', { class: 'grupo-titulo', text: 'Contraseña' }), el('div', { class: 'opciones' }, conClave), campoClave));
     return [
       el('h2', { class: 'hoja-titulo', text: 'Crear PDF' }),

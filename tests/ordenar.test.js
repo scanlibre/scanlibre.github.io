@@ -86,7 +86,7 @@ describe('Ordenar arrastrando y elegir varias páginas', () => {
     await page.click('dialog .boton-peligro');
     await page.waitForSelector('#doc-barra-seleccion', { state: 'hidden' });
     assert.deepEqual(await orden(page), [p1]);
-    assert.equal((await leerBase(page)).paginas.length, 1);
+    assert.equal((await leerBase(page)).paginas.filter(p => !p.papelera).length, 1, 'las otras dos quedan en la papelera');
     assert.deepEqual(page.errores, []);
   });
 

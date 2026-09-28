@@ -13,6 +13,7 @@ import { nuevoDocumento, importarArchivos, textoLeido, textoDePagina } from '../
 import { elegirArchivos } from '../archivos.js';
 import { crearRespaldo, restaurarRespaldo } from '../respaldo.js';
 import { puedeCompartir, compartir, descargar } from '../exportar.js';
+import { mostrarPapelera, enPapelera } from './papelera.js';
 
 let urls = [];
 const soltarUrls = () => { urls.forEach(u => URL.revokeObjectURL(u)); urls = []; };
@@ -294,13 +295,16 @@ export function iniciar() {
   $('#inicio-escanear').addEventListener('click', () => { nuevaSesion(null, 'inicio'); ir('camara'); });
   $('#inicio-importar').addEventListener('click', importar);
   $('#inicio-menu').addEventListener('click', async () => {
+    const enLaPapelera = await enPapelera();
     const opcion = await menu([
       { valor: 'respaldar', texto: 'Respaldar todo en un archivo', icono: 'respaldo' },
       { valor: 'restaurar', texto: 'Restaurar un respaldo', icono: 'restaurar' },
+      { valor: 'papelera', texto: enLaPapelera ? `Papelera (${enLaPapelera})` : 'Papelera', icono: 'basura' },
       { valor: 'acerca', texto: 'Acerca de ScanLibre', icono: 'info' }
     ]);
     try {
-      if (opcion === 'respaldar') await respaldar();
+      if (opcion === 'papelera') await mostrarPapelera(() => mostrar());
+      else if (opcion === 'respaldar') await respaldar();
       else if (opcion === 'restaurar') await restaurar();
       else if (opcion === 'acerca') await acercaDe();
     } catch (e) {
