@@ -91,7 +91,11 @@ describe('La cámara', () => {
   });
 
   it('el disparador no toma fotos antes de que la cámara tenga imagen', async () => {
-    const page = await env.pagina();
+    // La cámara tarda un poco en dar imagen (si no, podría estar lista antes de mirar)
+    const page = await env.pagina({ antes: () => {
+      const pedir = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      navigator.mediaDevices.getUserMedia = c => new Promise(r => setTimeout(r, 1500)).then(() => pedir(c));
+    } });
     await page.click('#inicio-escanear');
     assert.equal(await page.isDisabled('#camara-disparar'), true);
     await page.waitForSelector('#camara-disparar:not([disabled])', { timeout: 20000 });
