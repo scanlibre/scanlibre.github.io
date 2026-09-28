@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { crearEntorno } from './ayuda.js';
@@ -28,7 +28,7 @@ describe('Sin internet', () => {
       ...archivos(join(RAIZ, 'icons')).filter(f => /\.(png|svg)$/.test(f) && !f.includes('maskable.svg'))
     ];
     for (const f of necesarios) assert.ok(lista.includes(f), `falta ${f} en sw.js`);
-    for (const f of lista.filter(f => f !== './')) assert.ok(necesarios.includes(f) || f.endsWith('.svg'), `${f} no existe`);
+    for (const f of lista.filter(f => f !== './')) assert.ok(necesarios.includes(f) || f.endsWith('.svg') || (f.startsWith('vendor/') && existsSync(join(RAIZ, f))), `${f} no existe`);
   });
 
   it('después de abrirla una vez, abre sin conexión', async () => {

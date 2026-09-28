@@ -10,8 +10,10 @@ import { $, aviso, menu } from '../util.js';
 import { ir, volver } from '../rutas.js';
 import { ajustes, cambiarAjuste, modoCamara } from '../ajustes.js';
 import { detectar, nitidez } from '../motor.js';
-import { aCanvas, aImageData, canvasABlob, normalizarFoto, soltarCanvas } from '../fotos.js';
+import { aCanvas, aImageData, canvasABlob, normalizarFoto, soltarCanvas, abrirFoto } from '../fotos.js';
 import { caraDeCedula } from '../cedula.js';
+import { leerCodigos } from '../codigos.js';
+import { mostrarCodigo } from './codigo.js';
 import { buscarHoja, crearPagina, crearPaginasDeLibro, crearPaginaDeCedula, encolar, agregarPaginaRevisada, eventosPaginas, importarArchivos, nuevoDocumento, pendientesEnCola, fotoBorrosa, esBorrosa, TODA_LA_FOTO } from '../paginas.js';
 import { agregarPagina, reemplazarPagina } from '../db.js';
 import { elegirArchivos } from '../archivos.js';
@@ -109,7 +111,7 @@ async function encender() {
   if (!video.videoWidth) await new Promise(r => video.addEventListener('loadeddata', r, { once: true }));
   if (flujo !== nuevo) return;
   $('#camara-disparar').disabled = false;
-  ponerPista('Apunta a la hoja', false);
+  ponerPista(modoActual() === 'qr' ? 'Apunta al código QR' : 'Apunta a la hoja', false);
   const pistaVideo = nuevo.getVideoTracks()[0];
   capturador = conFotoCompleta ? new ImageCapture(pistaVideo) : null;
   let capacidades = {};
@@ -154,6 +156,7 @@ const conLimite = (promesa, ms) => Promise.race([promesa, new Promise((_, no) =>
 function cuadro(t) {
   if (!activa || !flujo) return;
   requestAnimationFrame(cuadro);
+  if (modoActual() === 'qr') return buscarCodigo(t);
   dibujarMarco();
   if (detectando || capturando || t - ultimaDeteccion < 130 || video.readyState < 2 || !video.videoWidth) return;
   detectando = true;
@@ -165,6 +168,48 @@ function cuadro(t) {
     .then(r => { if (activa) alDetectar(r, img); })
     .catch(() => {})
     .finally(() => { detectando = false; });
+}
+
+// ── Modo QR: se lee el código en vivo, sin tomar foto ───────────────
+const modoActual = () => (sesion?.reemplazar ? 'hoja' : modoCamara());
+let leyendoCodigo = false, mostrandoCodigo = false, ultimaLectura = 0, ultimoCodigo = { texto: '', cuando: 0 };
+
+function buscarCodigo(t) {
+  if (leyendoCodigo || mostrandoCodigo || t - ultimaLectura < 250 || video.readyState < 2 || !video.videoWidth) return;
+  leyendoCodigo = true;
+  ultimaLectura = t;
+  conLimite(leerCodigos(video), 2500)
+    .then(codigos => {
+      const c = codigos[0];
+      if (!c || !activa || modoActual() !== 'qr') return;
+      // El mismo código recién cerrado no se vuelve a abrir al tiro
+      if (c.texto === ultimoCodigo.texto && performance.now() - ultimoCodigo.cuando < 3000) return;
+      mostrarLeido(c.texto);
+    })
+    .catch(() => {})
+    .finally(() => { leyendoCodigo = false; });
+}
+
+async function mostrarLeido(texto) {
+  mostrandoCodigo = true;
+  try { navigator.vibrate?.(30); } catch (e) {}
+  ponerPista('Código leído', true);
+  try { await mostrarCodigo(texto); } finally {
+    mostrandoCodigo = false;
+    ultimoCodigo = { texto, cuando: performance.now() };
+    if (activa) ponerPista('Apunta al código QR', false);
+  }
+}
+
+/** Modo QR con una foto de la galería (por ejemplo, una captura de pantalla con un QR) */
+async function codigosDeGaleria(archivos) {
+  for (const archivo of archivos) {
+    const bmp = await abrirFoto(archivo);
+    let codigos = [];
+    try { codigos = await leerCodigos(bmp, { varios: true }); } finally { bmp.close?.(); }
+    if (!codigos.length) { aviso('No encontré códigos en esa imagen.'); continue; }
+    for (const c of codigos) await mostrarCodigo(c.texto);
+  }
 }
 
 /** Huella chiquita de la imagen: sirve para notar que ya se pasó a otra página */
@@ -585,6 +630,7 @@ async function terminar() {
 async function desdeGaleria() {
   const archivos = await elegirArchivos('entrada-fotos');
   if (!archivos.length) return;
+  if (modoActual() === 'qr') return codigosDeGaleria(archivos);
   const docId = await asegurarDocumento();
   importarArchivos(docId, archivos, modoCamara() === 'pizarra' ? { filtro: 'pizarra' } : {});
   sesion.cantidad += archivos.length;
@@ -602,7 +648,8 @@ const MODOS = {
   hoja: { corto: 'Hoja', icono: 'imagen', texto: 'Hoja: una página por foto', aviso: 'Una hoja por foto.' },
   libro: { corto: 'Libro', icono: 'libro', texto: 'Libro abierto: las dos páginas en una foto', aviso: 'Libro: toma el libro abierto con las dos páginas; se separan solas.' },
   pizarra: { corto: 'Pizarra', icono: 'pizarra', texto: 'Pizarra: blanca, verde o negra', aviso: 'Pizarra: queda con fondo blanco y el escrito oscuro y nítido (también la de tiza).' },
-  cedula: { corto: 'Cédula', icono: 'cedula', texto: 'Cédula o carné: las dos caras en una hoja, a tamaño real', aviso: 'Cédula: toma el frente y después el reverso; quedan juntos en una hoja, a tamaño real.' }
+  cedula: { corto: 'Cédula', icono: 'cedula', texto: 'Cédula o carné: las dos caras en una hoja, a tamaño real', aviso: 'Cédula: toma el frente y después el reverso; quedan juntos en una hoja, a tamaño real.' },
+  qr: { corto: 'QR', icono: 'qr', texto: 'Código QR: leerlo (enlace, Wi-Fi, texto)', aviso: 'Apunta al código: se lee solo.' }
 };
 
 function pintarBotones() {
@@ -615,6 +662,12 @@ function pintarBotones() {
   $('#camara-modo-icono').setAttribute('href', '#i-' + m.icono);
   $('#camara-modo').setAttribute('aria-label', `Modo: ${m.corto}. Tocar para cambiarlo`);
   $('#camara-modo').classList.toggle('chip-activo', modoCamara() !== 'hoja');
+  // En el modo QR no se toman fotos
+  const qr = modoActual() === 'qr';
+  $('#camara-disparar').style.visibility = qr ? 'hidden' : '';
+  $('#camara-auto').hidden = $('#camara-rafaga').hidden = qr;
+  if (qr) { limpiarMarco(); vivas = null; }
+  if (flujo && pista.textContent === (qr ? 'Apunta a la hoja' : 'Apunta al código QR')) ponerPista(qr ? 'Apunta al código QR' : 'Apunta a la hoja', false);
   const paso = $('#camara-paso');
   paso.hidden = modoCamara() !== 'cedula' || !!sesion.reemplazar;
   paso.textContent = sesion.cedula ? 'Cédula: ahora el reverso' : 'Cédula: primero el frente';

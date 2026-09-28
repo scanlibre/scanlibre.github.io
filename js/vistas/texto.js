@@ -4,12 +4,13 @@
 
 import { el, icono, hoja, aviso, menu, nombreArchivo } from '../util.js';
 import { puedeHablar, crearLector } from '../voz.js';
+import { traducirTexto } from './traduccion.js';
 import { puedeCompartir, compartir, descargar } from '../exportar.js';
 import { textoDePagina } from '../paginas.js';
 import { IDIOMAS, PRIMERA_DESCARGA } from '../ocr.js';
 import { ajustes, cambiarAjuste } from '../ajustes.js';
 
-async function copiar(texto, area) {
+export async function copiar(texto, area) {
   try {
     await navigator.clipboard.writeText(texto);
   } catch (e) {
@@ -28,7 +29,7 @@ function paginasDelTexto(texto, varias) {
   return out.length ? out : [{ n: 1, texto }];
 }
 
-async function aWord(nombre, paginas) {
+export async function aWord(nombre, paginas) {
   const { crearWord } = await import('../word.js');
   const blob = await crearWord(nombre, paginas);
   const archivo = nombreArchivo(nombre, 'docx');
@@ -134,6 +135,10 @@ export function mostrarTexto(paginas, { titulo, nombre = titulo, numeros = null,
       else if (fin) { estado.textContent = 'Listo: se leyó todo el texto.'; escuchando(false); }
       else if (error) { estado.textContent = 'Este teléfono no pudo leer en voz alta. Revisa que tenga instalada una voz en español (Ajustes → Texto a voz).'; escuchando(false); }
     } });
+    const botonTraducir = el('button', { class: 'boton boton-secundario', disabled: true, onclick: () => {
+      if (lector?.activo) lector.pausar();
+      traducirTexto(area.value, { ingles: idioma === 'eng', nombre });
+    } }, icono('traducir'), 'Traducir');
     const botonWord = el('button', { class: 'boton boton-secundario', disabled: true, onclick: () =>
       aWord(nombre, conColores && area.value === original ? conColores : paginasDelTexto(area.value, varias)) }, icono('word'), 'Word');
     const chips = Object.entries(IDIOMAS).map(([valor, texto]) => el('button', {
@@ -152,7 +157,7 @@ export function mostrarTexto(paginas, { titulo, nombre = titulo, numeros = null,
       area.hidden = true;
       lector?.detener();
       if (lector) { escuchando(false); area.hidden = true; }
-      for (const b of [botonCopiar, botonCompartir, botonEscuchar, botonWord]) if (b) b.disabled = true;
+      for (const b of [botonCopiar, botonCompartir, botonEscuchar, botonWord, botonTraducir]) if (b) b.disabled = true;
       progreso.hidden = false;
       barra.style.width = '0%';
       estado.textContent = 'Preparando el lector de texto…';
@@ -186,7 +191,7 @@ export function mostrarTexto(paginas, { titulo, nombre = titulo, numeros = null,
         }
         area.value = original = varias ? partes.map(p => `— Página ${p.n} —\n${p.texto}`).join('\n\n') : partes[0].texto;
         area.hidden = false;
-        for (const b of [botonCopiar, botonCompartir, botonEscuchar, botonWord]) if (b) b.disabled = false;
+        for (const b of [botonCopiar, botonCompartir, botonEscuchar, botonWord, botonTraducir]) if (b) b.disabled = false;
         estado.textContent = extraer
           ? `${partes.reduce((s, p) => s + p.resaltados.length, 0)} partes resaltadas. Revísalas: la letra a mano y las fotos borrosas pueden leerse con errores.`
           : 'Revisa el texto antes de usarlo: la letra a mano y las fotos borrosas pueden leerse con errores.';
@@ -204,7 +209,7 @@ export function mostrarTexto(paginas, { titulo, nombre = titulo, numeros = null,
       el('div', { class: 'idiomas', role: 'group', 'aria-label': 'Idioma del texto' }, chips),
       estado, progreso, area, lectura, velocidades,
       el('div', { class: 'hoja-botones' }, botonEscuchar, botonDetener, botonWord),
-      el('div', { class: 'hoja-botones' }, botonCompartir, botonCopiar)
+      el('div', { class: 'hoja-botones' }, botonCompartir, botonTraducir, botonCopiar)
     ];
   });
   // Al cerrar la hoja se deja de leer en voz alta

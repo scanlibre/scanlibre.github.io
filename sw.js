@@ -3,12 +3,13 @@
 // cambios se sube VERSION (y el número de js/version.js): el navegador baja la
 // versión nueva y borra la vieja.
 
-const VERSION = 'scanlibre-v27';
+const VERSION = 'scanlibre-v28';
 // El lector de texto (unos 6 MB) no se baja al instalar: se guarda la primera vez
 // que se usa, en su propio caché, que no se borra al publicar versiones de la app
 const LECTOR = 'scanlibre-lector-v1';
 // Lo mismo con el lector de PDF (pdf.js, unos 2 MB): se guarda al importar el primer PDF
 const PDFJS = 'scanlibre-pdfjs-v1';
+// En cambio, el lector de QR (jsQR, 130 KB) es chico y va con la app desde el principio
 const ARCHIVOS = [
   './',
   'index.html',
@@ -23,6 +24,7 @@ const ARCHIVOS = [
   'js/ajustes.js',
   'js/archivos.js',
   'js/buscar.js',
+  'js/codigos.js',
   'js/cedula.js',
   'js/cifrado.js',
   'js/db.js',
@@ -35,6 +37,7 @@ const ARCHIVOS = [
   'js/portada.js',
   'js/pdf.js',
   'js/respaldo.js',
+  'js/traducir.js',
   'js/rutas.js',
   'js/ocr.js',
   'js/util.js',
@@ -55,6 +58,7 @@ const ARCHIVOS = [
   'js/imagen/repetidas.js',
   'js/imagen/worker.js',
   'js/vistas/camara.js',
+  'js/vistas/codigo.js',
   'js/vistas/documento.js',
   'js/vistas/inicio.js',
   'js/vistas/marcar.js',
@@ -62,7 +66,9 @@ const ARCHIVOS = [
   'js/vistas/papelera.js',
   'js/vistas/portada.js',
   'js/vistas/recorte.js',
-  'js/vistas/texto.js'
+  'js/vistas/texto.js',
+  'js/vistas/traduccion.js',
+  'vendor/jsqr/jsQR.min.js'
 ];
 
 self.addEventListener('install', e => {

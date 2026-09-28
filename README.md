@@ -12,9 +12,10 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Toca para enfocar** en la parte de la hoja que quieras (si el teléfono lo permite).
 - **Aviso de foto borrosa:** ningún filtro arregla una foto movida o desenfocada, así que la app lo dice al momento y ofrece **Repetir foto**. Las páginas borrosas se marcan en el documento y se pueden **volver a tomar** sin perder su lugar.
 - **Enderezado real:** corrige la perspectiva y calcula la proporción verdadera de la hoja aunque la foto se haya tomado en ángulo.
-- **Modo de la cámara** (botón "Modo"): Hoja, Libro abierto, Pizarra o Cédula.
+- **Modo de la cámara** (botón "Modo"): Hoja, Libro abierto, Pizarra, Cédula o Código QR.
 - **Modo cédula:** el frente y el reverso de la cédula, un carné o una tarjeta en una sola hoja carta o A4, **a tamaño real** (85,6 × 54 mm), como la fotocopia que piden en los trámites. Al imprimir el PDF al 100 %, mide lo mismo que la de verdad. Si solo tomas el frente, queda solo el frente.
 - **Modo pizarra:** pizarra blanca de marcador o verde/negra de tiza, siempre con fondo blanco y el escrito oscuro y nítido para leerla e imprimirla. En la blanca se van la sombra, el gris y el brillo de las lámparas; en la de tiza, la tiza pasa a trazo oscuro y la de color queda de su color. También es un filtro más en cada página.
+- **Leer códigos QR:** en el modo *Código QR* la cámara lee el código sola, sin tomar foto; también se leen los QR de una página ya escaneada o de una foto de la galería (Más → Leer códigos QR). Antes de abrir un enlace se ve **a qué sitio lleva** y si la conexión es segura; de una red Wi-Fi se copia la contraseña, y también entiende correos, teléfonos y contactos. En los teléfonos que saben, lee también códigos de barras.
 - **Modo libro:** una foto del libro abierto se vuelve dos páginas: la app busca el lomo (la franja sin letras y la sombra del doblez) y parte la hoja siguiendo la perspectiva. También con "Separar" en una página ya tomada.
 - **Quitar dedos:** los dedos que sostienen la hoja en los bordes se tapan con el color del papel (de piel clara a morena, también en sombra). Una hoja amarillenta o un dibujo en medio de la página no se tocan, y en cada página se puede deshacer.
 - **Páginas curvas de libros:** si la hoja no queda plana (cerca del lomo o con una esquina levantada), sigue los renglones de texto y los endereza. En una hoja plana no toca nada, y en cada página se puede deshacer.
@@ -26,6 +27,7 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Texto (OCR), gratis y sin internet:** copiar o compartir el texto de una página o de todo el documento, en español, inglés o los dos. Y **PDF con texto buscable**: se ve igual, pero se pueden buscar y copiar las palabras. Antes de leer, la página se prepara (papel parejo, más contraste y nitidez): así lee también la letra chica de un libro.
 - **El texto a Word (.docx)** para seguir trabajándolo, con los renglones de cada párrafo juntados y las listas aparte.
 - **Escuchar el texto** con la voz del teléfono, frase por frase, con pausa. Mientras lee se ve el texto con **la frase resaltada** (y la palabra, en los teléfonos que avisan por dónde van); tocar una frase lee desde ahí, y la velocidad va de 0,8× a 1,5×.
+- **Traducir el texto** al inglés o al español, para leer una lectura en inglés o mandar un resumen. En Chrome se usa el traductor que trae el teléfono: el idioma se baja una vez y después traduce **sin internet, sin que el texto salga del teléfono**. Si el teléfono no lo trae, se abre Google Traductor con el texto, avisando antes que así sí se envía a Google. La traducción se copia, se escucha o se lleva a Word.
 - **Fotos a resolución completa** (hasta 4000 px, 12 MP): la letra chica conserva el detalle.
 - **Buscar en todos los documentos:** en los nombres y en el texto de cada página, sin importar tildes ni mayúsculas. Muestra la página y el pedazo donde está la palabra; las páginas que faltan se leen con un toque.
 - **Carpetas por clase:** lo que escaneas dentro de una carpeta se guarda ahí y se nombra solo («Cálculo – 27 sept»). Los documentos se pueden mover de carpeta; borrar una carpeta no borra sus documentos.
@@ -46,7 +48,7 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 
 ## Cómo funciona por dentro
 
-La detección, los filtros, el PDF y el respaldo están escritos para esta app, sin librerías (unos 380 KB de código). Para leer el texto se usa [Tesseract.js](https://github.com/naptha/tesseract.js), incluido en `vendor/tesseract/`, y para importar PDF, [pdf.js](https://github.com/mozilla/pdf.js) de Mozilla, en `vendor/pdfjs/` (los dos con licencia Apache 2.0): no dependen de ninguna CDN, se bajan la primera vez que se usan y después funcionan sin conexión.
+La detección, los filtros, el PDF y el respaldo están escritos para esta app, sin librerías (unos 380 KB de código). Para leer el texto se usa [Tesseract.js](https://github.com/naptha/tesseract.js), incluido en `vendor/tesseract/`, para importar PDF, [pdf.js](https://github.com/mozilla/pdf.js) de Mozilla, en `vendor/pdfjs/`, y para los códigos QR, [jsQR](https://github.com/cozmo/jsQR), en `vendor/jsqr/` (los tres con licencia Apache 2.0): no dependen de ninguna CDN y funcionan sin conexión. jsQR (130 KB) viene guardado desde el principio; Tesseract.js y pdf.js se bajan la primera vez que se usan.
 
 | Parte | Archivo | Qué hace |
 |---|---|---|
@@ -66,6 +68,8 @@ La detección, los filtros, el PDF y el respaldo están escritos para esta app, 
 | PDF | `js/pdf.js` | Escritor de PDF propio: JPEG tal cual (DCTDecode) y B/N a 1 bit (FlateDecode). Con OCR, cada palabra va invisible (modo 3) en su lugar, en Courier estirada al ancho de la palabra. |
 | Lectura | `js/imagen/lectura.js` | Prepara la página para el OCR: papel parejo, contraste como el filtro Gris y máscara de enfoque. |
 | OCR | `js/ocr.js` | Tesseract.js 7 (modelos `best_int` de español e inglés). Se carga la primera vez que se usa (unos 6 MB en español) y el service worker lo guarda para usarlo sin conexión. |
+| Códigos QR | `js/codigos.js` | El lector del teléfono (BarcodeDetector) si lo hay; si no, jsQR en la imagen entera y en cinco recortes (cada cuarto y el centro) para encontrar varios códigos. Lee los formatos de enlace, `WIFI:`, `mailto:`, `tel:`, vCard y MeCard. |
+| Traducir | `js/traducir.js` | La API Translator del navegador, párrafo por párrafo (se ve el avance y los encabezados «— Página N —» quedan como están). |
 | Contraseña | `js/cifrado.js` | Cifrado estándar de PDF, revisión 6 (AES-256) con WebCrypto: el "algoritmo 2.B" para la clave y AES-CBC para cada imagen, página y texto. |
 | Respaldo | `js/respaldo.js` | ZIP propio para el respaldo. |
 | Guardado | `js/db.js` | IndexedDB, solo en el teléfono. |
@@ -100,7 +104,11 @@ js/paginas.js       de la foto a la página guardada, con cola para las ráfagas
 js/exportar.js      PDF y compartir
 js/respaldo.js      respaldo .zip
 js/ocr.js           lector de texto (Tesseract.js)
+js/codigos.js       leer códigos QR
+js/traducir.js      traducir el texto
 vendor/tesseract/   Tesseract.js, sus núcleos y los idiomas (ver LEEME.md)
+vendor/pdfjs/       pdf.js, para importar PDF
+vendor/jsqr/        jsQR, para leer códigos QR
 sw.js               modo sin conexión (subir VERSION al publicar cambios)
 tests/              pruebas (node:test + Playwright)
 ```
@@ -125,8 +133,8 @@ Lo que sigue sale de lo que la gente les pide y les reclama a CamScanner, Genius
 - Respaldo cifrado opcional en la nube (Supabase, como las fotos de Mi Pisto HN).
 - Publicación en Google Play (TWA con PWABuilder).
 
-**Nunca:** anuncios, marca de agua, cuentas obligatorias ni funciones gratis que después se cobran.
+**Nunca:** anuncios, marca de agua de la app en tus documentos, cuentas obligatorias ni funciones gratis que después se cobran.
 
 ## Privacidad
 
-ScanLibre no tiene servidor. Las fotos, los documentos y los PDF se quedan en el navegador del teléfono. No hay cuentas, analítica ni rastreo.
+ScanLibre no tiene servidor. Las fotos, los documentos y los PDF se quedan en el navegador del teléfono. No hay cuentas, analítica ni rastreo. Lo único que puede salir a internet es lo que tú eliges: traducir con Google Traductor en un teléfono sin traductor propio (la app lo avisa antes) o abrir el enlace de un código QR.

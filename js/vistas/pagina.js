@@ -13,6 +13,7 @@ import { ajustes, cambiarAjuste } from '../ajustes.js';
 import { abrirRecorte } from './recorte.js';
 import { mostrarTexto } from './texto.js';
 import { editarPortada } from './portada.js';
+import { mostrarCodigo } from './codigo.js';
 import { puedeCompartir, compartir, descargar } from '../exportar.js';
 
 let doc = null, pagina = null, n = 1, url = null, trabajando = false, turnoImagen = 0;
@@ -249,6 +250,26 @@ async function borrar() {
   else ir(ruta('pagina', Math.min(n, quedan)), { reemplazar: true });
 }
 
+/** Los códigos QR que hay en la página (una factura, una guía, un afiche) */
+async function codigosDeLaPagina() {
+  let codigos = null;
+  await conEspera(async () => {
+    const { leerCodigos } = await import('../codigos.js');
+    const bmp = await abrirFoto(pagina.procesada);
+    try { codigos = await leerCodigos(bmp, { varios: true }); } finally { bmp.close?.(); }
+  });
+  // La hoja con lo que dice el código se abre ya sin el "Procesando…"
+  if (!codigos) return;
+  if (!codigos.length) return aviso('No encontré códigos QR en esta página.');
+  let elegido = codigos[0];
+  if (codigos.length > 1) {
+    const i = await menu(codigos.map((c, k) => ({ valor: k, texto: c.texto.length > 60 ? c.texto.slice(0, 57) + '…' : c.texto, icono: 'qr' })), `${codigos.length} códigos en la página`);
+    if (i === undefined) return;
+    elegido = codigos[i];
+  }
+  await mostrarCodigo(elegido.texto);
+}
+
 /** Desde esta página hasta el final pasa a un documento nuevo */
 async function dividir() {
   const total = doc.paginas.length;
@@ -272,7 +293,8 @@ async function masOpciones() {
     { valor: 'separar', texto: 'Libro abierto: separar en dos páginas', icono: 'libro' },
     n > 1 && { valor: 'dividir', texto: `Dividir aquí: de la página ${n} en adelante, un documento nuevo`, icono: 'pdf' },
     { valor: 'imagen', texto: 'Guardar como imagen', icono: 'descargar' },
-    { valor: 'imagen-marca', texto: 'Guardar como imagen con marca de agua', icono: 'descargar' }
+    { valor: 'imagen-marca', texto: 'Guardar como imagen con marca de agua', icono: 'descargar' },
+    { valor: 'codigos', texto: 'Leer códigos QR de la página', icono: 'qr' }
   ].filter(Boolean), `Página ${n}`);
   if (opcion === 'antes') mover(-1);
   else if (opcion === 'despues') mover(1);
@@ -280,6 +302,7 @@ async function masOpciones() {
   else if (opcion === 'dividir') dividir();
   else if (opcion === 'imagen') guardarImagen();
   else if (opcion === 'imagen-marca') guardarImagen({ conMarcaDeAgua: true });
+  else if (opcion === 'codigos') codigosDeLaPagina();
 }
 
 // Libro abierto en una sola página: se separa en dos (la derecha queda después)
