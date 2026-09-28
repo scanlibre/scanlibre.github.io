@@ -29,20 +29,27 @@ export function parrafos(texto) {
   return out;
 }
 
-const trozo = (texto, { negrita = false, tam = 0 } = {}) =>
-  `<w:r><w:rPr>${negrita ? '<w:b/>' : ''}${tam ? `<w:sz w:val="${tam}"/>` : ''}<w:lang w:val="es-HN"/></w:rPr><w:t xml:space="preserve">${escapar(texto)}</w:t></w:r>`;
+// Los colores del resaltador de la app, con el nombre que les da Word
+const RESALTE = { amarillo: 'yellow', verde: 'green', rosado: 'magenta', celeste: 'cyan' };
+
+const trozo = (texto, { negrita = false, tam = 0, resaltado = null } = {}) =>
+  `<w:r><w:rPr>${negrita ? '<w:b/>' : ''}${tam ? `<w:sz w:val="${tam}"/>` : ''}${resaltado ? `<w:highlight w:val="${RESALTE[resaltado] || 'yellow'}"/>` : ''}<w:lang w:val="es-HN"/></w:rPr><w:t xml:space="preserve">${escapar(texto)}</w:t></w:r>`;
 const parrafo = (contenido, despues = 160) => `<w:p><w:pPr><w:spacing w:after="${despues}"/></w:pPr>${contenido}</w:p>`;
 
 /**
  * @param titulo  el nombre del documento
- * @param paginas [{ n, texto }]
+ * @param paginas [{ n, texto }] o, con lo resaltado, [{ n, resaltados: [{ texto, color }] }] (cada parte, resaltada en Word con su color)
  * @returns Blob del .docx
  */
 export async function crearWord(titulo, paginas) {
   const cuerpo = [parrafo(trozo(titulo, { negrita: true, tam: 36 }), 280)];
-  const varias = paginas.length > 1;
+  const varias = paginas.length > 1 || paginas.some(p => p.resaltados);
   for (const p of paginas) {
     if (varias) cuerpo.push(parrafo(trozo(`Página ${p.n}`, { negrita: true, tam: 26 }), 120));
+    if (p.resaltados) {
+      for (const r of p.resaltados) cuerpo.push(parrafo(trozo(r.texto, { resaltado: r.color })));
+      continue;
+    }
     const ps = parrafos(p.texto || '');
     if (!ps.length) cuerpo.push(parrafo(trozo('(Sin texto)')));
     for (const t of ps) cuerpo.push(parrafo(trozo(t)));

@@ -8,6 +8,7 @@ import { obtenerDocumento, guardarDocumento, paginasDe, borrarDocumento, listarC
 import { ir, volver } from '../rutas.js';
 import { eventosPaginas, pendientesEnCola, importarArchivos, textoDePagina, esBorrosa, reprocesar, nuevoDocumento } from '../paginas.js';
 import { FILTROS } from '../imagen/filtros.js';
+import { textoResaltado } from '../marcas.js';
 import { mostrarTexto } from './texto.js';
 import { editarPortada } from './portada.js';
 import { nuevaSesion } from './camara.js';
@@ -395,6 +396,17 @@ async function moverACarpeta() {
   pintar();
 }
 
+/** Solo lo que se resaltó en todo el documento, por página: para repasar */
+async function loResaltado() {
+  const doc = await obtenerDocumento(docId);
+  const conResaltado = (await paginasDe(doc)).map((p, i) => ({ p, n: i + 1 })).filter(({ p }) => p.marcas?.some(m => m.tipo === 'resaltador'));
+  if (!conResaltado.length) return aviso('Todavía no hay nada resaltado. En una página, toca Marcar y pasa el dedo sobre el texto.', 'info', 5500);
+  return mostrarTexto(conResaltado.map(x => x.p), {
+    titulo: 'Lo resaltado', nombre: `${doc.nombre} – lo resaltado`, numeros: conResaltado.map(x => x.n),
+    extraer: (p, ocr) => textoResaltado(p.marcas, ocr, p.procAncho, p.procAlto)
+  });
+}
+
 /** Las páginas de otro documento pasan al final de este, y el otro se borra */
 async function unirCon() {
   const [doc, todos] = await Promise.all([obtenerDocumento(docId), listarDocumentos()]);
@@ -428,6 +440,7 @@ async function masOpciones() {
   const tienePortada = (await paginasDe(await obtenerDocumento(docId))).some(p => p.modo === 'portada');
   const opcion = await menu([
     { valor: 'texto', texto: 'Texto de todo el documento (copiar, escuchar, Word)', icono: 'texto' },
+    { valor: 'resaltado', texto: 'Lo resaltado (para estudiar)', icono: 'resaltador' },
     { valor: 'portada', texto: tienePortada ? 'Cambiar la portada' : 'Portada del trabajo', icono: 'portada' },
     { valor: 'elegir', texto: 'Elegir páginas (girar, pasar a otro documento…)', icono: 'listo' },
     { valor: 'unir', texto: 'Unir con otro documento', icono: 'mas' },
@@ -439,6 +452,7 @@ async function masOpciones() {
   if (opcion === 'elegir') return entrarSeleccion();
   if (opcion === 'unir') return unirCon();
   if (opcion === 'portada') { if (await editarPortada(docId)) pintar(); return; }
+  if (opcion === 'resaltado') return loResaltado();
   if (opcion === 'texto') {
     const doc = await obtenerDocumento(docId);
     const paginas = await paginasDe(doc);

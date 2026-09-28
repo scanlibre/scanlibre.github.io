@@ -155,6 +155,51 @@ export function marcaEn(ctx, marcas, px, py, W, H, margen = 0) {
 }
 
 /**
+ * El texto que quedó bajo el resaltador, para estudiar: en el orden de la
+ * página, con el color de cada parte. Una palabra cuenta si su centro queda
+ * dentro del trazo; un trazo que sigue en el renglón de abajo con el mismo
+ * color es la misma parte (una frase que se resaltó en dos renglones).
+ * @param ocr el texto leído de la página ({ ancho, alto, lineas })
+ * @param W, H tamaño de la página en px
+ * @returns [{ color: 'amarillo' | 'verde' | …, texto }]
+ */
+export function textoResaltado(marcas, ocr, W, H) {
+  const trazos = (marcas || []).filter(m => m.tipo === 'resaltador' && m.puntos?.length >= 2);
+  if (!trazos.length || !ocr?.lineas?.length || !ocr.ancho) return [];
+  const nombreDe = Object.fromEntries(Object.entries(RESALTADORES).map(([k, v]) => [v, k]));
+  const kx = W / ocr.ancho, ky = H / ocr.alto;
+  const usadas = new Set(), partes = [];
+  for (const m of trazos) {
+    const g = m.grosor * W / 2, p = m.puntos, tocadas = [];
+    ocr.lineas.forEach((l, li) => l.palabras.forEach((w, pi) => {
+      const cx = (w.x0 + w.x1) / 2 * kx, cy = (w.y0 + w.y1) / 2 * ky, medio = (w.y1 - w.y0) * ky / 2;
+      let d = p.length === 2 ? Math.hypot(cx - p[0] * W, cy - p[1] * H) : Infinity;
+      for (let i = 0; i + 3 < p.length; i += 2) d = Math.min(d, distSegmento(cx, cy, p[i] * W, p[i + 1] * H, p[i + 2] * W, p[i + 3] * H));
+      const clave = `${li}:${pi}`;
+      if (d <= Math.max(g, medio * 0.9) && !usadas.has(clave)) { usadas.add(clave); tocadas.push({ li, pi, t: w.t }); }
+    }));
+    if (tocadas.length) partes.push({ color: nombreDe[m.color] || 'amarillo', palabras: tocadas });
+  }
+  partes.sort((a, b) => a.palabras[0].li - b.palabras[0].li || a.palabras[0].pi - b.palabras[0].pi);
+  const juntas = [];
+  for (const parte of partes) {
+    const antes = juntas[juntas.length - 1];
+    if (antes && antes.color === parte.color && parte.palabras[0].li === antes.palabras[antes.palabras.length - 1].li + 1) antes.palabras.push(...parte.palabras);
+    else juntas.push({ color: parte.color, palabras: [...parte.palabras] });
+  }
+  return juntas.map(({ color, palabras }) => {
+    let texto = '';
+    palabras.forEach((w, i) => {
+      const antes = palabras[i - 1];
+      // "pala-" al final del renglón + "bra" = "palabra"
+      if (antes && antes.li !== w.li && /\p{L}[-‐]$/u.test(texto) && /^\p{Ll}/u.test(w.t)) texto = texto.slice(0, -1) + w.t;
+      else texto += (texto ? ' ' : '') + w.t;
+    });
+    return { color, texto };
+  });
+}
+
+/**
  * La página en gris y chica (de ancho máximo `maxAncho`), para buscar los
  * renglones bajo el resaltador. `fuente` es un canvas o un bitmap.
  */

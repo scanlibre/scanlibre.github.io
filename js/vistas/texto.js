@@ -43,16 +43,22 @@ async function aWord(nombre, paginas) {
   }
 }
 
+/** Lo que se escucha: sin las rayas de "— Página 2 —" ni las viñetas */
+const paraVoz = t => t.replace(/^— Página (\d+) —$/gm, 'Página $1.').replace(/^• (\([a-z]+\) )?/gm, '');
+
 /**
  * @param paginas las páginas a leer, en orden
  * @param nombre  cómo se llama el documento (para el Word)
+ * @param numeros el número de cada página en el documento (si no son todas)
+ * @param extraer (pagina, ocr) → [{ texto, color }]: en vez de todo el texto, solo esas partes (lo resaltado)
  */
-export function mostrarTexto(paginas, { titulo, nombre = titulo }) {
+export function mostrarTexto(paginas, { titulo, nombre = titulo, numeros = null, extraer = null }) {
   let lector = null;
   const abierta = hoja(() => {
     let idioma = ajustes().ocrIdioma;
     let turno = 0; // si se cambia el idioma a mitad de la lectura, la lectura vieja no pinta nada
-    const varias = paginas.length > 1;
+    const varias = paginas.length > 1 || !!extraer;
+    let original = '', conColores = null; // para el Word con los colores de lo resaltado
     const estado = el('p', { class: 'hoja-detalle', 'aria-live': 'polite' });
     const barra = el('span');
     const progreso = el('div', { class: 'progreso' }, barra);
@@ -66,7 +72,7 @@ export function mostrarTexto(paginas, { titulo, nombre = titulo }) {
     const botonEscuchar = puedeHablar() && el('button', { class: 'boton boton-secundario', disabled: true, onclick: () => {
       if (lector.activo) lector.pausar();
       else if (lector.pausado) lector.seguir();
-      else lector.empezar(area.value, { enIngles: idioma === 'eng' });
+      else lector.empezar(paraVoz(area.value), { enIngles: idioma === 'eng' });
     } }, icono('voz'), etiqueta);
     if (botonEscuchar) lector = crearLector({ alCambiar: ({ activo, i, total, frase, fin, error }) => {
       etiqueta.textContent = activo ? 'Pausa' : lector.pausado ? 'Seguir' : 'Escuchar';
@@ -77,7 +83,8 @@ export function mostrarTexto(paginas, { titulo, nombre = titulo }) {
       else if (fin) estado.textContent = 'Listo: se leyó todo el texto.';
       else if (error) estado.textContent = 'Este teléfono no pudo leer en voz alta. Revisa que tenga instalada una voz en español (Ajustes → Texto a voz).';
     } });
-    const botonWord = el('button', { class: 'boton boton-secundario', disabled: true, onclick: () => aWord(nombre, paginasDelTexto(area.value, varias)) }, icono('word'), 'Word');
+    const botonWord = el('button', { class: 'boton boton-secundario', disabled: true, onclick: () =>
+      aWord(nombre, conColores && area.value === original ? conColores : paginasDelTexto(area.value, varias)) }, icono('word'), 'Word');
     const chips = Object.entries(IDIOMAS).map(([valor, texto]) => el('button', {
       class: 'filtro', 'aria-pressed': String(valor === idioma), onclick: () => {
         if (valor === idioma) return;
@@ -110,17 +117,27 @@ export function mostrarTexto(paginas, { titulo, nombre = titulo }) {
             }
           });
           if (este !== turno) return;
-          partes.push({ n: i + 1, texto: ocr.texto });
+          const n = numeros ? numeros[i] : i + 1;
+          if (extraer) { const r = extraer(paginas[i], ocr); if (r.length) partes.push({ n, resaltados: r }); }
+          else partes.push({ n, texto: ocr.texto });
         }
         progreso.hidden = true;
+        if (extraer) {
+          // Una parte por renglón; si se usaron varios colores, cada una dice el suyo
+          const colores = new Set(partes.flatMap(p => p.resaltados.map(r => r.color)));
+          for (const p of partes) p.texto = p.resaltados.map(r => `• ${colores.size > 1 ? `(${r.color}) ` : ''}${r.texto}`).join('\n');
+          conColores = partes.map(({ n, resaltados }) => ({ n, resaltados }));
+        }
         if (!partes.some(p => p.texto)) {
-          estado.textContent = varias ? 'No encontré texto en estas páginas.' : 'No encontré texto en esta página.';
+          estado.textContent = extraer ? 'No encontré texto bajo lo resaltado (¿es letra a mano?).' : varias ? 'No encontré texto en estas páginas.' : 'No encontré texto en esta página.';
           return;
         }
-        area.value = varias ? partes.map(p => `— Página ${p.n} —\n${p.texto}`).join('\n\n') : partes[0].texto;
+        area.value = original = varias ? partes.map(p => `— Página ${p.n} —\n${p.texto}`).join('\n\n') : partes[0].texto;
         area.hidden = false;
         for (const b of [botonCopiar, botonCompartir, botonEscuchar, botonWord]) if (b) b.disabled = false;
-        estado.textContent = 'Revisa el texto antes de usarlo: la letra a mano y las fotos borrosas pueden leerse con errores.';
+        estado.textContent = extraer
+          ? `${partes.reduce((s, p) => s + p.resaltados.length, 0)} partes resaltadas. Revísalas: la letra a mano y las fotos borrosas pueden leerse con errores.`
+          : 'Revisa el texto antes de usarlo: la letra a mano y las fotos borrosas pueden leerse con errores.';
       } catch (e) {
         if (este !== turno) return;
         console.error(e);
