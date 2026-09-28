@@ -65,6 +65,8 @@ export function medirNitidez(img) {
     const i = y * w + x, cont = max[i] - min[i];
     if (cont < CONTRASTE_MIN) continue;
     const m = mag[i], ax = Math.abs(gx[i]), ay = Math.abs(gy[i]);
+    // Sin cambio de brillo no hay borde (en una imagen digital limpia, el papel es parejo del todo)
+    if (m < 0.05 * cont) continue;
     const paso = ay <= ax * 0.4142 ? 1 : ay >= ax * 2.4142 ? w : gx[i] * gy[i] > 0 ? w + 1 : w - 1;
     if (m < mag[i - paso] || m < mag[i + paso]) continue;
     hist[Math.min(BINS - 1, (m / cont * BINS) | 0)]++;

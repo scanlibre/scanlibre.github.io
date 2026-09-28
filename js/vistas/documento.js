@@ -116,16 +116,17 @@ async function renombrar() {
 
 async function masOpciones() {
   const opcion = await menu([
-    { valor: 'texto', texto: 'Copiar el texto de todo el documento', icono: 'texto' },
+    { valor: 'texto', texto: 'Texto de todo el documento (copiar, escuchar, Word)', icono: 'texto' },
     { valor: 'renombrar', texto: 'Cambiar el nombre', icono: 'editar' },
     { valor: 'mover', texto: 'Mover a una carpeta', icono: 'carpeta' },
     { valor: 'borrar', texto: 'Eliminar el documento', icono: 'basura', peligro: true }
   ]);
   if (opcion === 'mover') return moverACarpeta();
   if (opcion === 'texto') {
-    const paginas = await paginasDe(await obtenerDocumento(docId));
+    const doc = await obtenerDocumento(docId);
+    const paginas = await paginasDe(doc);
     if (!paginas.length) return aviso('El documento todavía no tiene páginas.');
-    return mostrarTexto(paginas, { titulo: 'Texto del documento' });
+    return mostrarTexto(paginas, { titulo: 'Texto del documento', nombre: doc.nombre });
   }
   if (opcion === 'renombrar') return renombrar();
   if (opcion === 'borrar') {

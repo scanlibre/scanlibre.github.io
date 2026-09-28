@@ -134,7 +134,7 @@ export function iniciar() {
   $('#pagina-mover-antes').addEventListener('click', () => mover(-1));
   $('#pagina-mover-despues').addEventListener('click', () => mover(1));
   $('#pagina-curva-boton').addEventListener('click', () => { if (pagina) cambiar({ aplanar: pagina.aplanar === false }); });
-  $('#pagina-texto').addEventListener('click', () => { if (pagina) mostrarTexto([pagina], { titulo: `Texto de la página ${n}` }); });
+  $('#pagina-texto').addEventListener('click', () => { if (pagina) mostrarTexto([pagina], { titulo: `Texto de la página ${n}`, nombre: `${doc.nombre} – página ${n}` }); });
   $('#pagina-guardar').addEventListener('click', guardarImagen);
   $('#pagina-borrar').addEventListener('click', borrar);
 }

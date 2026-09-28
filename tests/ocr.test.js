@@ -85,6 +85,51 @@ describe('Lector de texto (OCR)', () => {
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('scanlibre_ajustes')).pdfTexto), true);
   });
 
+  it('el texto se lleva a Word (.docx)', async () => {
+    const page = await env.pagina();
+    await importarFoto(page, hoja2);
+    await page.click('#doc-paginas .miniatura');
+    await page.click('#pagina-texto');
+    await esperarTexto(page);
+    const [descarga] = await Promise.all([page.waitForEvent('download'), page.click('dialog .boton:has-text("Word")')]);
+    assert.match(descarga.suggestedFilename(), /– página 1\.docx$/);
+    const { leerZip } = await import('../js/respaldo.js');
+    const { readFileSync } = await import('node:fs');
+    const zip = await leerZip(new Blob([readFileSync(await descarga.path())]));
+    const xml = await zip.get('word/document.xml').text();
+    assert.match(xml, /Historia de Honduras/);
+    assert.match(xml, /La independencia fue en 1821\./);
+  });
+
+  it('el texto se escucha en voz alta, con pausa, y se calla al cerrar', async () => {
+    // Voz simulada: el navegador de las pruebas no habla
+    const page = await env.pagina({ antes: () => {
+      window.dichas = []; window.calladas = 0;
+      const voz = { speak(u) { window.dichas.push({ texto: u.text, lang: u.lang }); setTimeout(() => u.onend?.(), 80); }, cancel() { window.calladas++; }, getVoices: () => [], pause() {}, resume() {} };
+      Object.defineProperty(window, 'speechSynthesis', { value: voz, configurable: true });
+    } });
+    await importarFoto(page, hoja1, hoja2);
+    await page.click('#doc-menu');
+    await page.click('.menu-opcion:nth-child(1)');
+    await esperarTexto(page);
+    const escuchar = page.locator('dialog .boton:has-text("Escuchar")');
+    await escuchar.click();
+    await page.waitForFunction(() => window.dichas.length >= 1);
+    assert.equal(await page.textContent('dialog .boton[aria-pressed="true"]'), 'Pausa');
+    await page.click('dialog .boton:has-text("Pausa")');
+    await page.waitForSelector('dialog .boton:has-text("Seguir")');
+    await page.click('dialog .boton:has-text("Seguir")');
+    await page.waitForSelector('dialog .hoja-detalle:has-text("se leyó todo el texto")', { timeout: 20000 });
+    const dichas = await page.evaluate(() => window.dichas);
+    const todo = dichas.map(d => d.texto).join(' ');
+    assert.match(todo, /Tarea de Cálculo/);
+    assert.match(todo, /1821/);
+    assert.ok(dichas.every(d => d.lang.startsWith('es')), 'en español');
+    const antes = await page.evaluate(() => window.calladas);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(n => window.calladas > n, antes);
+  });
+
   it('el texto leído viaja en el respaldo', async () => {
     const page = await env.pagina();
     await importarFoto(page, hoja2);

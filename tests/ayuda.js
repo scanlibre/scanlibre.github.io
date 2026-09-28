@@ -51,11 +51,14 @@ function cuadrosConTemblor(escena, W, H, m, a) {
 export async function crearEntorno({ video } = {}) {
   const srv = await servir();
   const args = video ? ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${video}`] : [];
-  const navegador = await chromium.launch({ args });
+  // Con UTF-8: sin eso, Chromium en Linux descarga "Cálculo.pdf" como "download"
+  const navegador = await chromium.launch({ args, env: { ...process.env, LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' } });
   return {
     url: srv.url,
-    async pagina({ oscuro = false, conCamara = !!video } = {}) {
+    /** @param antes código que corre en la página antes que la app (por ejemplo, para simular algo del teléfono) */
+    async pagina({ oscuro = false, conCamara = !!video, antes = null } = {}) {
       const ctx = await navegador.newContext({ viewport: { width: 390, height: 844 }, colorScheme: oscuro ? 'dark' : 'light', acceptDownloads: true });
+      if (antes) await ctx.addInitScript(antes);
       if (conCamara) await ctx.grantPermissions(['camera'], { origin: srv.url.replace(/\/$/, '') });
       const page = await ctx.newPage();
       page.errores = [];
