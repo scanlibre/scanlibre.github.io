@@ -87,7 +87,9 @@ export async function abrirPDF(archivo, { pedirClave } = {}) {
     wasmUrl: BASE + 'wasm/',
     standardFontDataUrl: BASE + 'standard_fonts/',
     iccUrl: BASE + 'iccs/',
-    enableXfa: false
+    enableXfa: false,
+    // Defensa extra: pdf.js nunca compila código de las fuentes del PDF (así se cerró CVE-2024-4367)
+    isEvalSupported: false
   });
   let cancelado = false;
   tarea.onPassword = async (dar, motivo) => {

@@ -1,0 +1,18 @@
+# Avisa (con un pull request) cuando hay versiones nuevas de lo que usa ScanLibre.
+# Las librerías que van dentro de vendor/ (Tesseract.js, pdf.js, jsQR) se
+# revisan a mano: ver SECURITY.md.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: gradle
+    directory: /android
+    schedule:
+      interval: monthly

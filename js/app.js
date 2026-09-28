@@ -13,6 +13,18 @@ import * as documento from './vistas/documento.js';
 import * as pagina from './vistas/pagina.js';
 import * as marcar from './vistas/marcar.js';
 
+// Nadie puede meter ScanLibre dentro de otra página para engañar con clics
+// (clickjacking). GitHub Pages no deja mandar la cabecera que lo prohíbe
+// (X-Frame-Options / frame-ancestors): esto hace lo mismo desde adentro.
+if (window.top !== window.self) {
+  document.body.textContent = '';
+  const abrir = document.createElement('a');
+  abrir.href = location.href; abrir.target = '_blank'; abrir.rel = 'noopener';
+  abrir.textContent = 'Abrir ScanLibre';
+  document.body.append(abrir);
+  throw new Error('ScanLibre no se abre dentro de otra página');
+}
+
 const vistas = { inicio, camara, recorte, documento, pagina, marcar };
 for (const v of Object.values(vistas)) v.iniciar();
 registrarVistas(vistas);

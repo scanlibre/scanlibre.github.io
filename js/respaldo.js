@@ -70,6 +70,21 @@ export async function crearZip(archivos, fecha = new Date()) {
   return new Blob([...partes, ...central, fin.buffer], { type: 'application/zip' });
 }
 
+// Un respaldo de verdad nunca trae un archivo de más de esto (una foto de 12 MP pesa unos 5 MB)
+const MAX_ARCHIVO_ZIP = 300e6;
+
+/** Corta la lectura si un archivo comprimido se infla más de `tope` bytes (una "bomba zip") */
+function conTope(tope) {
+  let n = 0;
+  return new TransformStream({
+    transform(trozo, control) {
+      n += trozo.byteLength;
+      if (n > tope) control.error(new Error('Respaldo dañado: un archivo es demasiado grande'));
+      else control.enqueue(trozo);
+    }
+  });
+}
+
 /** Lee un .zip y devuelve Map(nombre → Blob). Entiende archivos sin comprimir y con deflate */
 export async function leerZip(blob) {
   const colaLargo = Math.min(blob.size, 65557);
@@ -86,7 +101,8 @@ export async function leerZip(blob) {
   for (let n = 0; n < cuantos; n++) {
     if (cen.getUint32(p, true) !== 0x02014b50) throw new Error('Respaldo dañado');
     const metodo = cen.getUint16(p + 10, true);
-    const tamComprimido = cen.getUint32(p + 20, true);
+    const tamComprimido = cen.getUint32(p + 20, true), tamReal = cen.getUint32(p + 24, true);
+    if (tamComprimido > MAX_ARCHIVO_ZIP || tamReal > MAX_ARCHIVO_ZIP) throw new Error('Respaldo dañado: un archivo es demasiado grande');
     const largoNombre = cen.getUint16(p + 28, true), largoExtra = cen.getUint16(p + 30, true), largoComentario = cen.getUint16(p + 32, true);
     const offLocal = cen.getUint32(p + 42, true);
     const nombre = decodificar.decode(new Uint8Array(cen.buffer, p + 46, largoNombre));
@@ -94,7 +110,7 @@ export async function leerZip(blob) {
     const local = new DataView(await blob.slice(offLocal, offLocal + 30).arrayBuffer());
     const inicio = offLocal + 30 + local.getUint16(26, true) + local.getUint16(28, true);
     let datos = blob.slice(inicio, inicio + tamComprimido);
-    if (metodo === 8) datos = await new Response(datos.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob();
+    if (metodo === 8) datos = await new Response(datos.stream().pipeThrough(new DecompressionStream('deflate-raw')).pipeThrough(conTope(tamReal))).blob();
     else if (metodo !== 0) throw new Error('Respaldo con un formato que no se puede leer');
     res.set(nombre, datos);
   }
