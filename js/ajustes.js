@@ -17,7 +17,9 @@ const FABRICA = {
   marcaConFecha: true,    // la marca de agua lleva la fecha de hoy
   ocrIdioma: 'spa',
   vozVelocidad: 1,        // velocidad de la voz al escuchar el texto
-  carpeta: null           // carpeta elegida en el inicio: lo que se escanea se guarda ahí
+  carpeta: null,          // carpeta elegida en el inicio: lo que se escanea se guarda ahí
+  nube: null,             // respaldo en la nube: { codigo, ultimo, bytes, documentos, … } (ver nube.js)
+  dispositivo: null       // un número al azar de este teléfono (para notar si otro respalda con el mismo código)
 };
 
 let actuales = null;

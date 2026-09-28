@@ -3,7 +3,7 @@
 // cambios se sube VERSION (y el número de js/version.js): el navegador baja la
 // versión nueva y borra la vieja.
 
-const VERSION = 'scanlibre-v28';
+const VERSION = 'scanlibre-v29';
 // El lector de texto (unos 6 MB) no se baja al instalar: se guarda la primera vez
 // que se usa, en su propio caché, que no se borra al publicar versiones de la app
 const LECTOR = 'scanlibre-lector-v1';
@@ -38,6 +38,8 @@ const ARCHIVOS = [
   'js/pdf.js',
   'js/respaldo.js',
   'js/traducir.js',
+  'js/llaves.js',
+  'js/nube.js',
   'js/rutas.js',
   'js/ocr.js',
   'js/util.js',
@@ -62,6 +64,7 @@ const ARCHIVOS = [
   'js/vistas/documento.js',
   'js/vistas/inicio.js',
   'js/vistas/marcar.js',
+  'js/vistas/nube.js',
   'js/vistas/pagina.js',
   'js/vistas/papelera.js',
   'js/vistas/portada.js',
@@ -99,8 +102,10 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (pedido.mode === 'navigate') {
-    // Cualquier pantalla de la app es index.html (las rutas van en el #)
-    e.respondWith(caches.match('index.html').then(r => r || fetch(pedido)));
+    // Cualquier pantalla de la app es index.html (las rutas van en el #); otras
+    // páginas del sitio (como privacidad.html) se piden a la red
+    if (camino.endsWith('/') || camino.endsWith('/index.html')) e.respondWith(caches.match('index.html').then(r => r || fetch(pedido)));
+    else e.respondWith(fetch(pedido).catch(() => caches.match('index.html')));
     return;
   }
   e.respondWith(caches.match(pedido, { ignoreSearch: true }).then(r => r || fetch(pedido)));

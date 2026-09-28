@@ -1,0 +1,54 @@
+{
+  "packageId": "io.github.scanlibre",
+  "host": "scanlibre.github.io",
+  "name": "ScanLibre · Escáner gratis",
+  "launcherName": "ScanLibre",
+  "display": "standalone",
+  "themeColor": "#0F766E",
+  "themeColorDark": "#0B1210",
+  "navigationColor": "#0B1210",
+  "navigationColorDark": "#0B1210",
+  "navigationDividerColor": "#0B1210",
+  "navigationDividerColorDark": "#0B1210",
+  "backgroundColor": "#0B1210",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://scanlibre.github.io/icons/icono-512.png",
+  "maskableIconUrl": "https://scanlibre.github.io/icons/icono-maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./llave-subida.jks",
+    "alias": "scanlibre"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "Escanear",
+      "shortName": "Escanear",
+      "url": "https://scanlibre.github.io/#/camara",
+      "chosenIconUrl": "https://scanlibre.github.io/icons/icono-192.png"
+    }
+  ],
+  "generatorApp": "unknown",
+  "webManifestUrl": "https://scanlibre.github.io/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": false,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://scanlibre.github.io/",
+  "minSdkVersion": 21,
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": [],
+  "launchHandlerClientMode": "",
+  "displayOverride": [],
+  "appVersion": "1.0.0"
+}

@@ -44,6 +44,8 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **PDF con contraseña, gratis:** cifrado AES-256 estándar (el que abren Adobe, Chrome y los visores de Android e iPhone). La contraseña no se guarda en ningún lado.
 - **Compartir** directo a WhatsApp, Drive o Classroom, o descargar el PDF.
 - **Respaldo gratis:** todos los documentos en un `.zip` para guardar donde quieras y restaurarlos en otro teléfono.
+- **Respaldo en la nube, cifrado:** se activa con un **código de respaldo** que solo tú guardas (sin cuenta ni correo). Todo se cifra en el teléfono antes de subir (AES-256): en la nube solo hay bytes que nadie más puede leer, ni ScanLibre. Se respalda solo cuando hay cambios y hay internet, y sube solo lo nuevo. En otro teléfono se recupera con el código. Si dos teléfonos usan el mismo código, pregunta antes de pisar nada y deja **juntar los dos**. Hasta 200 MB por respaldo (las fotos originales van reducidas a 3000 px).
+- **App de Android** para Google Play (Trusted Web Activity): la misma app a pantalla completa, que se actualiza sola con la web. Ver [`android/LEEME.md`](android/LEEME.md).
 - **Tema claro u oscuro** según el teléfono. Las páginas escaneadas nunca se invierten.
 
 ## Cómo funciona por dentro
@@ -72,6 +74,9 @@ La detección, los filtros, el PDF y el respaldo están escritos para esta app, 
 | Traducir | `js/traducir.js` | La API Translator del navegador, párrafo por párrafo (se ve el avance y los encabezados «— Página N —» quedan como están). |
 | Contraseña | `js/cifrado.js` | Cifrado estándar de PDF, revisión 6 (AES-256) con WebCrypto: el "algoritmo 2.B" para la clave y AES-CBC para cada imagen, página y texto. |
 | Respaldo | `js/respaldo.js` | ZIP propio para el respaldo. |
+| Código y llaves | `js/llaves.js` | Código de 23 caracteres al azar en base 32 de Crockford (115 bits) más uno de control. De él salen con HKDF-SHA-256 el número del respaldo, la llave que ve el servidor, la de cifrado (AES-256-GCM, con el nombre del archivo atado al cifrado) y la de los nombres (HMAC). |
+| Nube | `js/nube.js` | Cada foto se nombra por la huella (SHA-256) de su contenido: si ya está en la nube no se vuelve a subir. El índice va comprimido y cifrado; una «marca» cifrada dice qué teléfono respaldó por última vez. |
+| Servidor | `supabase/` | Proyecto propio de Supabase: una tabla (el número del respaldo y la huella de su llave), un depósito privado y la función `respaldo`, que revisa la llave y da permisos firmados para subir y bajar directo al depósito. |
 | Guardado | `js/db.js` | IndexedDB, solo en el teléfono. |
 
 Probada con 12 fotos reales de documentos (cartas, formularios, cuadernos con renglones, apuntes a mano, recibos): encontró la hoja en las 12.
@@ -109,6 +114,11 @@ js/traducir.js      traducir el texto
 vendor/tesseract/   Tesseract.js, sus núcleos y los idiomas (ver LEEME.md)
 vendor/pdfjs/       pdf.js, para importar PDF
 vendor/jsqr/        jsQR, para leer códigos QR
+js/nube.js          respaldo cifrado en la nube (con js/llaves.js)
+supabase/           la base y la función del respaldo en la nube
+android/            la app de Android (TWA) y la ficha de Google Play
+privacidad.html     política de privacidad
+.well-known/        assetlinks.json: el sitio confía en la app de Android
 sw.js               modo sin conexión (subir VERSION al publicar cambios)
 tests/              pruebas (node:test + Playwright)
 ```
@@ -130,11 +140,11 @@ Lo que sigue sale de lo que la gente les pide y les reclama a CamScanner, Genius
 - ✅ Modo libro (las dos páginas de una foto).
 - ✅ Modo pizarra.
 - ✅ Modo cédula (las dos caras en una hoja, a tamaño real).
-- Respaldo cifrado opcional en la nube (Supabase, como las fotos de Mi Pisto HN).
-- Publicación en Google Play (TWA con PWABuilder).
+- ✅ Respaldo cifrado opcional en la nube (Supabase).
+- ✅ App de Android lista para Google Play (TWA con Bubblewrap). Falta la cuenta de desarrollador y la prueba cerrada.
 
 **Nunca:** anuncios, marca de agua de la app en tus documentos, cuentas obligatorias ni funciones gratis que después se cobran.
 
 ## Privacidad
 
-ScanLibre no tiene servidor. Las fotos, los documentos y los PDF se quedan en el navegador del teléfono. No hay cuentas, analítica ni rastreo. Lo único que puede salir a internet es lo que tú eliges: traducir con Google Traductor en un teléfono sin traductor propio (la app lo avisa antes) o abrir el enlace de un código QR.
+Las fotos, los documentos y los PDF se procesan y se quedan en el teléfono. No hay cuentas, analítica ni rastreo. Lo único que puede salir a internet es lo que tú eliges: el respaldo en la nube (cifrado en el teléfono con tu código: el servidor no puede leerlo), traducir con Google Traductor en un teléfono sin traductor propio (la app lo avisa antes) o abrir el enlace de un código QR. Todo el detalle está en [privacidad.html](https://scanlibre.github.io/privacidad.html).

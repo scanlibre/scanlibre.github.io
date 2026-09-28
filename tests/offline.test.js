@@ -43,4 +43,21 @@ describe('Sin internet', () => {
     assert.equal(await page.isVisible('#inicio-escanear'), true);
     assert.deepEqual(page.errores, []);
   });
+
+  it('con la app guardada, las otras páginas del sitio se siguen viendo (la de privacidad)', async () => {
+    const page = await env.pagina();
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+      if (!navigator.serviceWorker.controller) await new Promise(r => navigator.serviceWorker.addEventListener('controllerchange', r, { once: true }));
+    });
+    await page.click('#inicio-menu');
+    await page.click('.menu-opcion:has-text("Acerca de")');
+    const [privacidad] = await Promise.all([page.context().waitForEvent('page'), page.click('#acerca-privacidad')]);
+    await privacidad.waitForLoadState();
+    assert.equal(await privacidad.textContent('h1'), 'Privacidad de ScanLibre');
+    assert.match(await privacidad.textContent('main'), /cifran en tu teléfono/);
+    const assetlinks = await (await page.request.get(env.url + '.well-known/assetlinks.json')).json();
+    assert.equal(assetlinks[0].target.package_name, 'io.github.scanlibre');
+    assert.match(assetlinks[0].target.sha256_cert_fingerprints[0], /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/);
+  });
 });

@@ -4,7 +4,7 @@
 // Adentro: scanlibre-respaldo.json con los datos (carpetas, documentos y
 // páginas) y las fotos de cada página.
 
-import { listarDocumentos, paginasDe, reemplazarDocumento, listarCarpetas, guardarCarpeta } from './db.js';
+import { listarDocumentos, obtenerDocumento, paginasDe, reemplazarDocumento, listarCarpetas, guardarCarpeta } from './db.js';
 import { abrirFoto, aCanvas, canvasABlob } from './fotos.js';
 import { dibujarMarcas } from './marcas.js';
 
@@ -104,7 +104,13 @@ export async function leerZip(blob) {
 // ── Respaldo de ScanLibre ───────────────────────────────────────────
 const extension = blob => blob.type === 'image/png' ? 'png' : 'jpg';
 
-export async function crearRespaldo() {
+/**
+ * Todo lo que va en un respaldo: el manifiesto (carpetas, documentos y los
+ * datos de cada página) y los archivos de las fotos, que el manifiesto nombra.
+ * Lo usan el respaldo en archivo y el de la nube.
+ * @returns { manifiesto, archivos: [{ nombre, datos: Blob }] }
+ */
+export async function contenidoDelRespaldo() {
   const docs = await listarDocumentos();
   const archivos = [];
   const manifiesto = { app: 'ScanLibre', version: 1, creado: Date.now(), carpetas: await listarCarpetas(), documentos: [] };
@@ -125,8 +131,13 @@ export async function crearRespaldo() {
       })
     });
   }
+  return { manifiesto, archivos };
+}
+
+export async function crearRespaldo() {
+  const { manifiesto, archivos } = await contenidoDelRespaldo();
   archivos.unshift({ nombre: MANIFIESTO, datos: new TextEncoder().encode(JSON.stringify(manifiesto)) });
-  return { blob: await crearZip(archivos), documentos: docs.length };
+  return { blob: await crearZip(archivos), documentos: manifiesto.documentos.length };
 }
 
 /** Restaura un respaldo. Los documentos que ya estaban quedan como en el respaldo. */
@@ -134,18 +145,34 @@ export async function restaurarRespaldo(archivo) {
   const zip = await leerZip(archivo);
   const m = zip.get(MANIFIESTO);
   if (!m) throw new Error('El archivo no es un respaldo de ScanLibre');
-  const manifiesto = JSON.parse(await m.text());
-  if (manifiesto.app !== 'ScanLibre' || !Array.isArray(manifiesto.documentos)) throw new Error('El archivo no es un respaldo de ScanLibre');
+  return restaurarContenido(JSON.parse(await m.text()), async nombre => zip.get(nombre));
+}
+
+/**
+ * Guarda en el teléfono lo que dice un manifiesto de respaldo.
+ * @param abrir (nombre) → Promise<Blob | undefined>: la foto que el manifiesto nombra
+ * @param alAvanzar ({ hechas, total }) por cada página
+ * @param juntar si ya hay un documento igual en el teléfono, queda el más nuevo de los dos
+ * @returns cuántos documentos se restauraron
+ */
+export async function restaurarContenido(manifiesto, abrir, { alAvanzar, juntar = false } = {}) {
+  if (manifiesto?.app !== 'ScanLibre' || !Array.isArray(manifiesto.documentos)) throw new Error('El archivo no es un respaldo de ScanLibre');
   const tipoDe = nombre => nombre.endsWith('.png') ? 'image/png' : 'image/jpeg';
   const conTipo = (blob, nombre) => blob.slice(0, blob.size, tipoDe(nombre));
-  let restaurados = 0;
+  const total = manifiesto.documentos.reduce((s, d) => s + (d.paginas?.length || 0), 0);
+  let restaurados = 0, hechas = 0;
   // Respaldos de antes de las carpetas no traen "carpetas"
   for (const c of manifiesto.carpetas || []) if (c?.id && c.nombre) await guardarCarpeta({ id: c.id, nombre: c.nombre, creada: c.creada || Date.now() });
   const hayCarpeta = new Set((manifiesto.carpetas || []).map(c => c?.id));
   for (const d of manifiesto.documentos) {
+    if (juntar) {
+      const aqui = await obtenerDocumento(d.id);
+      if (aqui && !aqui.papelera && (aqui.modificado || 0) >= (d.modificado || 0)) { hechas += d.paginas.length; continue; }
+    }
     const paginas = [];
     for (const p of d.paginas) {
-      const original = zip.get(p.original), procesada = zip.get(p.procesada);
+      const original = await abrir(p.original), procesada = await abrir(p.procesada);
+      alAvanzar?.({ hechas: ++hechas, total });
       if (!original || !procesada) continue;
       const bmp = await abrirFoto(conTipo(procesada, p.procesada));
       const chico = aCanvas(bmp, 360);

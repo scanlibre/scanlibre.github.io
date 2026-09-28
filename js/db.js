@@ -9,6 +9,18 @@
 const NOMBRE = 'scanlibre', VERSION = 2;
 let conexion = null;
 
+// Cuándo se cambió algo por última vez (el respaldo en la nube lo mira para saber si hay algo nuevo)
+const CAMBIO = 'scanlibre_cambio';
+let cambio = null;
+export function ultimoCambio() {
+  if (cambio === null) { try { cambio = Number(localStorage.getItem(CAMBIO)) || 0; } catch (e) { cambio = 0; } }
+  return cambio;
+}
+function marcarCambio() {
+  cambio = Date.now();
+  try { localStorage.setItem(CAMBIO, String(cambio)); } catch (e) {}
+}
+
 function abrir() {
   if (conexion) return conexion;
   conexion = new Promise((resolver, rechazar) => {
@@ -21,6 +33,12 @@ function abrir() {
     };
     pedido.onsuccess = () => {
       const db = pedido.result;
+      // Todo lo que escribe pasa por una transacción "readwrite": ahí se anota el cambio
+      const transaccion = db.transaction.bind(db);
+      db.transaction = (tiendas, modo, ...resto) => {
+        if (modo === 'readwrite') marcarCambio();
+        return transaccion(tiendas, modo, ...resto);
+      };
       // Si otra pestaña abre una versión nueva de la app, esta suelta la base para que se pueda actualizar
       db.onversionchange = () => { db.close(); conexion = null; };
       resolver(db);

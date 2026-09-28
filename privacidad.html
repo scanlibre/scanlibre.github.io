@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Privacidad · ScanLibre</title>
+<meta name="description" content="Qué hace ScanLibre con tus fotos y documentos: todo se queda en tu teléfono, salvo lo que tú eliges.">
+<link rel="icon" href="icons/icono.svg" type="image/svg+xml">
+<style>
+  :root { --fondo: #f3f6f5; --superficie: #fff; --texto: #12201c; --texto-2: #566763; --marca: #0f766e; --borde: #d6dfdc; color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) { :root { --fondo: #0b1210; --superficie: #141d1b; --texto: #e5eeeb; --texto-2: #97a9a4; --marca: #2dd4bf; --borde: #28352f; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 28px 18px 60px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  header img { width: 44px; height: 44px; }
+  h1 { font-size: 1.6rem; line-height: 1.2; margin: 0; }
+  h2 { font-size: 1.15rem; margin: 30px 0 6px; }
+  p, li { color: var(--texto-2); }
+  strong { color: var(--texto); }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  a { color: var(--marca); }
+  .corto { background: var(--superficie); border: 1px solid var(--borde); border-radius: 16px; padding: 6px 18px; margin: 20px 0; }
+  .fecha { font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icons/icono-192.png" alt="">
+    <h1>Privacidad de ScanLibre</h1>
+  </header>
+  <p class="fecha">Última actualización: 28 de septiembre de 2026</p>
+
+  <p>ScanLibre es un escáner de documentos gratis para estudiantes, sin anuncios y sin cuenta. Funciona igual en el navegador (<a href="https://scanlibre.github.io">scanlibre.github.io</a>) y en la app de Android. Esta página explica qué pasa con tus fotos y documentos.</p>
+
+  <div class="corto">
+    <ul>
+      <li><strong>Tus fotos y documentos se procesan y se guardan en tu teléfono.</strong> No hay cuentas, anuncios, analítica ni rastreo.</li>
+      <li><strong>Solo sale algo a internet si tú lo eliges:</strong> el respaldo en la nube (va cifrado), traducir con Google Traductor, abrir el enlace de un código QR o compartir un archivo con otra app.</li>
+      <li>No vendemos ni compartimos datos con nadie.</li>
+    </ul>
+  </div>
+
+  <h2>La cámara</h2>
+  <p>La app pide la cámara para fotografiar documentos y leer códigos QR. Las fotos se procesan en el teléfono (encontrar la hoja, enderezarla, los filtros) y no se suben a ningún lado.</p>
+
+  <h2>Dónde quedan tus documentos</h2>
+  <p>En el almacenamiento de la app dentro de tu teléfono. Si borras los datos de la app o la desinstalas, se borran. El respaldo en archivo (.zip) lo guardas tú donde quieras.</p>
+
+  <h2>Respaldo en la nube (solo si lo activas)</h2>
+  <ul>
+    <li>Antes de subir, cada foto y el índice de tus documentos se <strong>cifran en tu teléfono</strong> (AES-256-GCM) con una llave que sale de tu <strong>código de respaldo</strong>. El código no sale nunca del teléfono: nosotros no lo conocemos y no podemos ver ni recuperar tus documentos.</li>
+    <li>En el servidor (Supabase, en Estados Unidos) queda: un número al azar que identifica tu respaldo, una huella de una llave que sale del código (para que solo quien tiene el código pueda cambiarlo o borrarlo), los archivos cifrados con nombres al azar, lo que pesan y cuándo se subieron.</li>
+    <li>Para evitar abusos, cuando se crea un respaldo nuevo se guarda por 24 horas una versión disfrazada (irreversible) de la dirección de internet (IP) desde donde se creó. Después se borra.</li>
+    <li>Puedes <strong>borrar tu respaldo de la nube</strong> cuando quieras: Menú → Respaldo en la nube → Más opciones → Borrar mi respaldo de la nube. Se borra en el momento.</li>
+  </ul>
+
+  <h2>Leer el texto y escucharlo</h2>
+  <p>El texto de las páginas se lee en el teléfono (el lector se baja una vez desde este mismo sitio) y la voz es la del teléfono. Nada de eso sale a internet.</p>
+
+  <h2>Traducir</h2>
+  <p>Si tu teléfono trae su propio traductor, la traducción se hace ahí mismo. Si no, y eliges «Abrir Google Traductor», el texto se envía a Google, que lo trata según <a href="https://policies.google.com/privacy?hl=es">su política de privacidad</a>. La app lo avisa antes.</p>
+
+  <h2>Códigos QR y enlaces</h2>
+  <p>Los códigos se leen en el teléfono. Si abres el enlace de un código, lo abre tu navegador; antes se muestra a qué sitio lleva.</p>
+
+  <h2>Niñas y niños</h2>
+  <p>ScanLibre no pide datos personales a nadie, de ninguna edad.</p>
+
+  <h2>Cambios y preguntas</h2>
+  <p>Si esta política cambia, se actualiza esta página con su fecha. Para preguntas o reclamos, escríbenos en <a href="https://github.com/scanlibre/scanlibre.github.io/issues">github.com/scanlibre/scanlibre.github.io/issues</a>.</p>
+</main>
+</body>
+</html>

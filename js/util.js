@@ -97,7 +97,8 @@ export function hoja(construir, { clase = '' } = {}) {
     const d = el('dialog', { class: 'hoja ' + clase });
     let valor;
     const cerrar = v => { valor = v; d.close(); };
-    d.append(...[construir(cerrar)].flat());
+    // Lo que no va (un `false`, un título que no hay) no se pone: si no, se vería "undefined"
+    d.append(...[construir(cerrar)].flat().filter(h => h !== null && h !== undefined && h !== false));
     d.addEventListener('close', () => { d.remove(); resolver(valor); });
     // Toque fuera de la hoja (en el fondo oscuro) para cerrarla
     d.addEventListener('click', e => {

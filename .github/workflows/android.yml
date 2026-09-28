@@ -1,0 +1,60 @@
+name: Android
+
+# Arma la app de Android (Trusted Web Activity: abre scanlibre.github.io a
+# pantalla completa) para subirla a Google Play. Se corre a mano desde la
+# pestaña Actions ("Run workflow") o sola cuando cambia la carpeta android/.
+#
+# Para que salga firmada, en Settings → Secrets and variables → Actions van
+# dos secretos: ANDROID_LLAVE (la llave de subida .jks en base64) y
+# ANDROID_LLAVE_CLAVE (su contraseña). Sin ellos sale sin firmar: sirve para
+# ver que compila, pero Google Play no la acepta.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Llave de firma
+        env:
+          ANDROID_LLAVE: ${{ secrets.ANDROID_LLAVE }}
+        run: |
+          if [ -n "$ANDROID_LLAVE" ]; then
+            echo "$ANDROID_LLAVE" | base64 -d > "$RUNNER_TEMP/llave-subida.jks"
+            echo "ANDROID_LLAVE_ARCHIVO=$RUNNER_TEMP/llave-subida.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Falta el secreto ANDROID_LLAVE: la app sale sin firmar (Google Play no la acepta así)."
+          fi
+
+      - name: Armar el .aab (Google Play) y el .apk (para instalar a mano)
+        working-directory: android
+        env:
+          ANDROID_LLAVE_CLAVE: ${{ secrets.ANDROID_LLAVE_CLAVE }}
+        run: ./gradlew --no-daemon bundleRelease assembleRelease
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScanLibre-android
+          path: |
+            android/app/build/outputs/bundle/release/*.aab
+            android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Borrar la llave
+        if: always()
+        run: rm -f "$RUNNER_TEMP/llave-subida.jks"
