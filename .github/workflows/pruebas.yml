@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:   # para correrlas a mano (por ejemplo, si GitHub no avisó de un push)
 
 permissions:
   contents: read

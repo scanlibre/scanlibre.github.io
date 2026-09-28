@@ -89,6 +89,8 @@ Una falla que se está aprovechando, una cuenta comprometida o código ajeno pub
 2. En GitHub: **Settings → Rules → Rulesets → New ruleset → Import a ruleset** y elige el archivo.
 3. Revisa que diga **Active** y guarda con **Create**.
 
+Desde entonces, cada cambio se hace en una rama y entra con un pull request cuando **Pruebas** pasa. Dependabot ya trabaja así.
+
 ## Requisitos externos
 
 | Requisito | Qué pide | Cómo se cumple | Revisado |
