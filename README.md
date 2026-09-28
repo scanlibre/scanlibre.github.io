@@ -17,6 +17,7 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Filtros:** Original, Mejorada (papel blanco sin sombras y sin saturar los colores), Dibujo (para lápiz y bocetos: se ven hasta los trazos más suaves), Gris y B/N (umbral local tipo Sauvola: no se come el texto suave ni deja manchas negras con la sombra del lomo de un libro).
 - **Texto (OCR), gratis y sin internet:** copiar o compartir el texto de una página o de todo el documento, en español, inglés o los dos. Y **PDF con texto buscable**: se ve igual, pero se pueden buscar y copiar las palabras. Antes de leer, la página se prepara (papel parejo, más contraste y nitidez): así lee también la letra chica de un libro.
 - **Fotos a resolución completa** (hasta 4000 px, 12 MP): la letra chica conserva el detalle.
+- **Buscar en todos los documentos:** en los nombres y en el texto de cada página, sin importar tildes ni mayúsculas. Muestra la página y el pedazo donde está la palabra; las páginas que faltan se leen con un toque.
 - **Carpetas por clase:** lo que escaneas dentro de una carpeta se guarda ahí y se nombra solo («Cálculo – 27 sept»). Los documentos se pueden mover de carpeta; borrar una carpeta no borra sus documentos.
 - **Documentos de varias páginas:** reordenar, girar, recortar de nuevo y borrar páginas, todo gratis.
 - **PDF** en tamaño carta, A4 o con la forma de la foto, y en tres calidades. La calidad *Liviana* sirve para subir a plataformas con límite de tamaño. Las páginas en B/N van a 1 bit por píxel: nítidas y livianas (unos 50 KB por página).
@@ -91,7 +92,7 @@ Lo que sigue sale de lo que la gente les pide y les reclama a CamScanner, Genius
 - ✅ Carpetas por clase y nombre automático («Cálculo – 27 sept»).
 - ✅ PDF con contraseña, gratis (AES-256).
 - Brillo y contraste a mano, guardables como perfil.
-- Buscar texto dentro de todos los documentos.
+- ✅ Buscar texto dentro de todos los documentos.
 
 **Fase 3**
 - ✅ Corrección de páginas curvas (libros).

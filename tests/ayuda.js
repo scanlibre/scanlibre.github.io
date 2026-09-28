@@ -69,6 +69,17 @@ export async function crearEntorno({ video } = {}) {
   };
 }
 
+/** Foto de una hoja con texto impreso (captura de una página HTML) */
+export async function fotoConTexto(nombre, lineas) {
+  const nav = await chromium.launch();
+  const p = await nav.newPage({ viewport: { width: 1000, height: 700 } });
+  await p.setContent(`<body style="margin:60px;font:40px Georgia;background:#fff;color:#111">${lineas.map(l => `<p>${l}</p>`).join('')}</body>`);
+  const ruta = join(carpeta, nombre);
+  await p.screenshot({ path: ruta });
+  await nav.close();
+  return ruta;
+}
+
 export async function importarFoto(page, ...rutas) {
   const [selector] = await Promise.all([page.waitForEvent('filechooser'), page.click('#inicio-importar')]);
   await selector.setFiles(rutas);

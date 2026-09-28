@@ -62,6 +62,11 @@ export async function guardarPagina(pagina) {
   return pagina;
 }
 
+/** Todas las páginas de todos los documentos (para buscar) */
+export async function listarPaginas() {
+  return hecho((await tienda('paginas')).getAll());
+}
+
 export async function paginasDe(doc) {
   const todas = await Promise.all(doc.paginas.map(obtenerPagina));
   return todas.filter(Boolean);

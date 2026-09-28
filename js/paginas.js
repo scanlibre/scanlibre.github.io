@@ -76,6 +76,9 @@ export async function reprocesar(pagina, cambios) {
 const LECTOR = 3;
 const versionDe = p => `l${LECTOR}|${p.filtro}|${p.rotacion}|${p.aplanar !== false}|${p.procAncho}x${p.procAlto}|${JSON.stringify(p.esquinas)}`;
 
+/** El texto ya leído de la página, si sigue siendo de esta versión de la página (si no, null) */
+export const textoLeido = p => (p.ocr && p.ocr.version === versionDe(p) ? p.ocr.texto : null);
+
 /**
  * Texto de la página con el lector de texto (OCR). Si ya se leyó con ese
  * idioma, no se vuelve a leer. El resultado se guarda con la página.
