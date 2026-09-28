@@ -98,20 +98,20 @@ const cambiar = cambios => conEspera(async () => { pagina = await reprocesar(pag
 async function abrirLuz() {
   if (!pagina || luz || trabajando) return;
   const esta = pagina;
-  await conEspera(async () => {
-    const base = await baseParaLuz(esta);
-    if (pagina !== esta) return;
-    luz = { base, brillo: esta.brillo || 0, contraste: esta.contraste || 0, ocupado: false, otra: false };
-    $('#pagina-brillo').value = luz.brillo;
-    $('#pagina-contraste').value = luz.contraste;
-    const bn = esta.filtro === 'bn';
-    $('#pagina-contraste-fila').hidden = bn;
-    $('#pagina-luz-bn').hidden = !bn;
-    $('#pagina-filtros').hidden = $('#pagina-herramientas').hidden = true;
-    $('#pagina-anterior').disabled = $('#pagina-siguiente').disabled = true;
-    $('#pagina-luz').hidden = false;
-    await verLuz();
-  });
+  let base = null;
+  await conEspera(async () => { base = await baseParaLuz(esta); });
+  if (!base || pagina !== esta || luz) return;
+  // La vista previa se arma aparte: "Listo" se puede tocar aunque todavía no esté
+  luz = { base, brillo: esta.brillo || 0, contraste: esta.contraste || 0, ocupado: false, otra: false };
+  $('#pagina-brillo').value = luz.brillo;
+  $('#pagina-contraste').value = luz.contraste;
+  const bn = esta.filtro === 'bn';
+  $('#pagina-contraste-fila').hidden = bn;
+  $('#pagina-luz-bn').hidden = !bn;
+  $('#pagina-filtros').hidden = $('#pagina-herramientas').hidden = true;
+  $('#pagina-anterior').disabled = $('#pagina-siguiente').disabled = true;
+  $('#pagina-luz').hidden = false;
+  verLuz();
 }
 
 function numeros() {

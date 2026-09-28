@@ -106,6 +106,7 @@ describe('La app', () => {
     const page = await env.pagina();
     await importarFoto(page, foto1.ruta);
     await page.click('#doc-paginas .miniatura');
+    await page.waitForSelector('#vista-pagina:not([hidden])');
     const filtros = await page.$$eval('#pagina-filtros .filtro', bs => bs.map(b => b.textContent));
     assert.deepEqual(filtros, ['Original', 'Mejorada', 'Dibujo', 'Gris', 'B/N', 'Pizarra']);
     // En un teléfono angosto el primer botón no queda cortado

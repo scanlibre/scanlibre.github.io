@@ -12,7 +12,8 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Toca para enfocar** en la parte de la hoja que quieras (si el teléfono lo permite).
 - **Aviso de foto borrosa:** ningún filtro arregla una foto movida o desenfocada, así que la app lo dice al momento y ofrece **Repetir foto**. Las páginas borrosas se marcan en el documento y se pueden **volver a tomar** sin perder su lugar.
 - **Enderezado real:** corrige la perspectiva y calcula la proporción verdadera de la hoja aunque la foto se haya tomado en ángulo.
-- **Modo de la cámara** (botón "Modo"): Hoja, Libro abierto o Pizarra.
+- **Modo de la cámara** (botón "Modo"): Hoja, Libro abierto, Pizarra o Cédula.
+- **Modo cédula:** el frente y el reverso de la cédula, un carné o una tarjeta en una sola hoja carta o A4, **a tamaño real** (85,6 × 54 mm), como la fotocopia que piden en los trámites. Al imprimir el PDF al 100 %, mide lo mismo que la de verdad. Si solo tomas el frente, queda solo el frente.
 - **Modo pizarra:** pizarra blanca de marcador o verde/negra de tiza, siempre con fondo blanco y el escrito oscuro y nítido para leerla e imprimirla. En la blanca se van la sombra, el gris y el brillo de las lámparas; en la de tiza, la tiza pasa a trazo oscuro y la de color queda de su color. También es un filtro más en cada página.
 - **Modo libro:** una foto del libro abierto se vuelve dos páginas: la app busca el lomo (la franja sin letras y la sombra del doblez) y parte la hoja siguiendo la perspectiva. También con "Separar" en una página ya tomada.
 - **Quitar dedos:** los dedos que sostienen la hoja en los bordes se tapan con el color del papel (de piel clara a morena, también en sombra). Una hoja amarillenta o un dibujo en medio de la página no se tocan, y en cada página se puede deshacer.
@@ -44,6 +45,7 @@ La detección, los filtros, el PDF y el respaldo están escritos para esta app, 
 | Detección | `js/imagen/deteccion.js` | Bordes (Canny) sobre brillo y saturación; los candidatos salen de grupos de bordes, zonas claras u oscuras (Otsu) y rectas largas (Hough, con el sentido del contraste). Cada lado se afina ajustando una recta y se califica por borde real y por contraste entre adentro y afuera. |
 | Dedos | `js/imagen/dedos.js` | Manchas con color de piel pegadas a un borde y con forma de dedo, más su sombra maciza; se tapan con el color del papel de alrededor. |
 | Marcas | `js/marcas.js` | Resaltador, lápiz, notas y firma en fracciones de la página: se dibujan a cualquier tamaño (el resaltador "multiplica", así las letras de abajo siguen negras). El trazo casi derecho se endereza por mínimos cuadrados y se ajusta al renglón buscando las filas con tinta y las palabras bajo él. Al girar la página, giran con ella. |
+| Cédula | `js/cedula.js` | Cada cara se endereza y se lleva a la medida ID-1 de las tarjetas (85,6 × 54 mm); las dos van centradas en una hoja carta o A4 a 300 ppp, con una raya fina para recortarlas. |
 | Libro | `js/imagen/libro.js` | Busca el lomo en el libro abierto enderezado y parte sus esquinas en dos hojas con la homografía. |
 | Páginas curvas | `js/imagen/aplanar.js` | Busca los renglones en franjas verticales, les ajusta una curva y corre cada columna para dejarlos rectos. |
 | Proporción | `js/imagen/geometria.js` | Homografía y proporción real de la hoja (método de Zhang y He). |
@@ -110,7 +112,7 @@ Lo que sigue sale de lo que la gente les pide y les reclama a CamScanner, Genius
 - ✅ Corrección de páginas curvas (libros).
 - ✅ Modo libro (las dos páginas de una foto).
 - ✅ Modo pizarra.
-- Modo cédula (las dos caras en una hoja).
+- ✅ Modo cédula (las dos caras en una hoja, a tamaño real).
 - Respaldo cifrado opcional en la nube (Supabase, como las fotos de Mi Pisto HN).
 - Publicación en Google Play (TWA con PWABuilder).
 

@@ -237,6 +237,11 @@ mark { background: var(--marca-suave); color: var(--texto); border-radius: 3px; 
   background: rgb(0 0 0 / 0.55); color: #fff;
   font-weight: 600; font-size: 0.95rem; white-space: nowrap;
 }
+.camara-paso {
+  position: absolute; left: 50%; top: calc(66px + var(--seguro-arriba)); z-index: 2; transform: translateX(-50%);
+  margin: 0; padding: 6px 14px; border-radius: 999px; white-space: nowrap;
+  background: #fef3c7; color: #4a3300; font-weight: 700; font-size: 0.9rem;
+}
 .camara-pista.encontrada { background: var(--marca); color: var(--marca-texto); }
 
 .camara-abajo {

@@ -10,6 +10,7 @@ import { agregarPagina, guardarDocumento, guardarPagina, obtenerDocumento, obten
 import { nuevoId, nombrePorDefecto, fechaDeClase } from './util.js';
 import { ajustes } from './ajustes.js';
 import { dibujarMarcas, girarMarcas } from './marcas.js';
+import { hojaDeCedula } from './cedula.js';
 
 export const TODA_LA_FOTO = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }];
 
@@ -57,6 +58,20 @@ export async function crearPagina(foto, esquinas, { soltar = true, filtro = ajus
   const r = await renderizar(foto.canvas, { esquinas: esq, filtro, rotacion: 0 });
   if (soltar) soltarCanvas(foto.canvas);
   return { id: nuevoId(), original: foto.blob, ancho: foto.ancho, alto: foto.alto, esquinas: esq, filtro, rotacion: 0, aplanar: true, dedos: true, creada: Date.now(), ...r };
+}
+
+/**
+ * Cédula: la hoja con el frente y el reverso (o solo el frente) a tamaño
+ * real, como una página más. No se endereza ni se buscan dedos: ya viene lista.
+ * @param caras [{ blob, vertical }] de caraDeCedula
+ */
+export async function crearPaginaDeCedula(caras, tamano = ajustes().pdfTamano) {
+  const hoja = await hojaDeCedula(caras, tamano === 'a4' ? 'a4' : 'carta');
+  const datos = { esquinas: TODA_LA_FOTO, filtro: 'original', rotacion: 0, aplanar: false, dedos: false };
+  const r = await renderizar(hoja.canvas, datos);
+  soltarCanvas(hoja.canvas);
+  // Casi toda la hoja es blanca: la nitidez no dice nada (cada cara se revisó al tomarla)
+  return { id: nuevoId(), original: hoja.blob, ancho: hoja.ancho, alto: hoja.alto, ...datos, modo: 'cedula', creada: Date.now(), ...r, nitidez: null };
 }
 
 /** Las esquinas de las dos páginas de un libro abierto en la foto (canvas o bitmap), o null */
@@ -110,6 +125,7 @@ export async function reprocesar(pagina, cambios) {
   bitmap.close?.();
   // El texto leído ya no corresponde a la página nueva
   const nueva = { ...pagina, ...datos, ...r, ocr: null };
+  if (pagina.modo === 'cedula') nueva.nitidez = null;
   await guardarPagina(nueva);
   const doc = await obtenerDocumento(pagina.docId);
   if (doc) { doc.modificado = Date.now(); await guardarDocumento(doc); }

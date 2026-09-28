@@ -11,7 +11,8 @@ import { ir, volver } from '../rutas.js';
 import { ajustes, cambiarAjuste, modoCamara } from '../ajustes.js';
 import { detectar, nitidez } from '../motor.js';
 import { aCanvas, aImageData, canvasABlob, normalizarFoto, soltarCanvas } from '../fotos.js';
-import { buscarHoja, crearPagina, crearPaginasDeLibro, encolar, importarArchivos, nuevoDocumento, pendientesEnCola, fotoBorrosa, esBorrosa, TODA_LA_FOTO } from '../paginas.js';
+import { caraDeCedula } from '../cedula.js';
+import { buscarHoja, crearPagina, crearPaginasDeLibro, crearPaginaDeCedula, encolar, importarArchivos, nuevoDocumento, pendientesEnCola, fotoBorrosa, esBorrosa, TODA_LA_FOTO } from '../paginas.js';
 import { agregarPagina, reemplazarPagina } from '../db.js';
 import { elegirArchivos } from '../archivos.js';
 import { abrirRecorte } from './recorte.js';
@@ -446,9 +447,10 @@ async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, 
     origen,
     ms
   });
-  const rafaga = ajustes().rafaga && !sesion.reemplazar;
   // Al volver a tomar una página es una sola hoja, con el filtro de siempre
   const modo = sesion.reemplazar ? 'hoja' : modoCamara();
+  // La cédula siempre pasa por el recorte: hay que ver bien cada cara
+  const rafaga = ajustes().rafaga && !sesion.reemplazar && modo !== 'cedula';
   const libro = modo === 'libro';
   const opciones = modo === 'pizarra' ? { filtro: 'pizarra' } : {};
   let esquinas = null, borrosa = false;
@@ -465,6 +467,7 @@ async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, 
     }
   }
   reintentos = 0;
+  if (modo === 'cedula') return caraDeLaCedula(foto, esquinas, borrosa);
   if (rafaga) {
     // Sin parar: la página se arma en la cola
     const docId = await asegurarDocumento();
@@ -523,7 +526,50 @@ async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, 
   });
 }
 
-function terminar() {
+/** Cédula: primero el frente y después el reverso; con las dos se arma la hoja */
+function caraDeLaCedula(foto, esquinas, borrosa) {
+  const reverso = !!sesion.cedula;
+  abrirRecorte({
+    fuente: foto.canvas,
+    esquinas,
+    borrosa,
+    textoCancelar: 'Repetir foto',
+    titulo: reverso ? 'Reverso de la cédula' : 'Frente de la cédula',
+    alListo: async esq => {
+      const cara = await caraDeCedula(foto.canvas, esq);
+      if (!reverso) {
+        sesion.cedula = { frente: cara };
+        pintarBotones();
+        aviso('Listo el frente. Ahora voltea la cédula y toma el reverso.', 'info', 5000);
+        return volver('camara');
+      }
+      const docId = await asegurarDocumento();
+      const pagina = await crearPaginaDeCedula([sesion.cedula.frente, cara]);
+      await agregarPagina(docId, pagina);
+      sesion.cedula = null;
+      contarPagina(URL.createObjectURL(pagina.miniatura));
+      aviso('Listo: el frente y el reverso quedaron en una hoja, a tamaño real.', 'exito', 4500);
+      volver('camara');
+    },
+    alCancelar: () => {
+      lista = true; firmaUltima = null; reintentos = 0;
+      volver('camara');
+    }
+  });
+}
+
+async function terminar() {
+  // Si de la cédula solo se tomó el frente, queda sola en la hoja (no se pierde)
+  if (sesion?.cedula) {
+    const { frente } = sesion.cedula;
+    sesion.cedula = null;
+    try {
+      const docId = await asegurarDocumento();
+      encolar(docId, () => crearPaginaDeCedula([frente]));
+      sesion.cantidad++;
+      aviso('La cédula quedó solo con el frente.', 'info', 4500);
+    } catch (e) { console.error(e); }
+  }
   const s = sesion;
   sesion = null;
   if (s?.ultima) URL.revokeObjectURL(s.ultima);
@@ -555,7 +601,8 @@ async function desdeCamaraDelTelefono() {
 const MODOS = {
   hoja: { corto: 'Hoja', icono: 'imagen', texto: 'Hoja: una página por foto', aviso: 'Una hoja por foto.' },
   libro: { corto: 'Libro', icono: 'libro', texto: 'Libro abierto: las dos páginas en una foto', aviso: 'Libro: toma el libro abierto con las dos páginas; se separan solas.' },
-  pizarra: { corto: 'Pizarra', icono: 'pizarra', texto: 'Pizarra: blanca, verde o negra', aviso: 'Pizarra: queda con fondo blanco y el escrito oscuro y nítido (también la de tiza).' }
+  pizarra: { corto: 'Pizarra', icono: 'pizarra', texto: 'Pizarra: blanca, verde o negra', aviso: 'Pizarra: queda con fondo blanco y el escrito oscuro y nítido (también la de tiza).' },
+  cedula: { corto: 'Cédula', icono: 'cedula', texto: 'Cédula o carné: las dos caras en una hoja, a tamaño real', aviso: 'Cédula: toma el frente y después el reverso; quedan juntos en una hoja, a tamaño real.' }
 };
 
 function pintarBotones() {
@@ -568,6 +615,9 @@ function pintarBotones() {
   $('#camara-modo-icono').setAttribute('href', '#i-' + m.icono);
   $('#camara-modo').setAttribute('aria-label', `Modo: ${m.corto}. Tocar para cambiarlo`);
   $('#camara-modo').classList.toggle('chip-activo', modoCamara() !== 'hoja');
+  const paso = $('#camara-paso');
+  paso.hidden = modoCamara() !== 'cedula' || !!sesion.reemplazar;
+  paso.textContent = sesion.cedula ? 'Cédula: ahora el reverso' : 'Cédula: primero el frente';
   const hay = sesion.cantidad > 0;
   $('#camara-listo').hidden = !hay;
   $('#camara-hueco').hidden = hay;
