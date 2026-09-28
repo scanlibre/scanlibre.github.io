@@ -8,7 +8,8 @@ export const FILTROS = {
   mejorada: 'Mejorada',
   dibujo: 'Dibujo',
   gris: 'Gris',
-  bn: 'B/N'
+  bn: 'B/N',
+  pizarra: 'Pizarra'
 };
 
 /**
@@ -22,6 +23,7 @@ export function aplicarFiltro(img, filtro, { brillo = 0, contraste = 0 } = {}) {
   if (filtro === 'mejorada') r = realzar(img, CURVA);
   else if (filtro === 'dibujo') r = realzar(img, CURVA_DIBUJO);
   else if (filtro === 'gris') r = gris(img);
+  else if (filtro === 'pizarra') r = pizarra(img);
   return ajustarLuz(r, brillo, contraste);
 }
 
@@ -307,6 +309,108 @@ function blancoYNegro(img, brillo = 0) {
       const tinta = v < 40 || (v < 248 && v < fila[x]);
       const c = tinta ? 0 : 255;
       out[j] = out[j + 1] = out[j + 2] = c; out[j + 3] = 255;
+    }
+  });
+  return { data: out, width: w, height: h };
+}
+
+/**
+ * Pizarra: siempre queda fondo blanco y el escrito oscuro y con color, para
+ * leerla bien e imprimirla.
+ *  · Blanca (de marcador): el fondo se aplana como el papel (se van las
+ *    sombras, el brillo de las lámparas y el gris), y los trazos se
+ *    oscurecen y se les sube el color.
+ *  · Verde o negra (de tiza): la tiza, que es lo claro sobre lo oscuro, pasa
+ *    a trazo oscuro sobre blanco; la tiza de color queda de su color.
+ */
+function pizarra(img) {
+  const L = luminancia(img);
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < L.length; i += 7) hist[L[i]]++;
+  let acum = 0, mediana = 0;
+  const total = Math.ceil(L.length / 7);
+  for (; mediana < 255; mediana++) { acum += hist[mediana]; if (acum >= total / 2) break; }
+  return mediana < 105 ? pizarraOscura(img, L) : pizarraBlanca(img, L);
+}
+
+function pizarraBlanca(img, L) {
+  const { data, width: w, height: h } = img;
+  const fondo = fondoDelPapel(L, w, h, img);
+  const [gr, gg, gb] = gananciasDeBlanco(img, L, w, h, fondo);
+  const out = new Uint8ClampedArray(data.length);
+  recorrerSuave(fondo.cuadro, fondo.gw, fondo.gh, fondo.bloque, w, h, (fila, y) => {
+    for (let x = 0, j = y * w * 4; x < w; x++, j += 4) {
+      const k = 255 / fila[x];
+      const r = Math.min(255, data[j] * gr * k), g = Math.min(255, data[j + 1] * gg * k), b = Math.min(255, data[j + 2] * gb * k);
+      const t = 1 - (0.299 * r + 0.587 * g + 0.114 * b) / 255; // cuánto trazo hay (0 = fondo)
+      // Lo muy suave es fondo (reflejos, manchas de borrador); el resto se refuerza
+      const t2 = t < 0.1 ? 0 : Math.min(1, Math.pow((t - 0.1) / 0.45, 0.8));
+      const f = t2 / Math.max(t, 0.01) * 1.08; // más oscuro y con más color, sin cambiar el tono
+      out[j] = 255 - (255 - r) * f;
+      out[j + 1] = 255 - (255 - g) * f;
+      out[j + 2] = 255 - (255 - b) * f;
+      out[j + 3] = 255;
+    }
+  });
+  return { data: out, width: w, height: h };
+}
+
+/** Tono (0..360) y saturación de un color */
+function tonoDe(r, g, b) {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  if (d < 1e-6) return { tono: 0, sat: 0 };
+  let tono;
+  if (max === r) tono = ((g - b) / d) % 6;
+  else if (max === g) tono = (b - r) / d + 2;
+  else tono = (r - g) / d + 4;
+  return { tono: (tono * 60 + 360) % 360, sat: d / max };
+}
+
+/** Color con ese tono, bien saturado y oscuro (para la tiza de color) */
+function tintaDeTono(tono) {
+  const s = 0.85, l = 0.4, c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((tono / 60) % 2 - 1)), m = l - c / 2;
+  const [r, g, b] = tono < 60 ? [c, x, 0] : tono < 120 ? [x, c, 0] : tono < 180 ? [0, c, x] : tono < 240 ? [0, x, c] : tono < 300 ? [x, 0, c] : [c, 0, x];
+  return [(r + m) * 255, (g + m) * 255, (b + m) * 255];
+}
+
+function pizarraOscura(img, L) {
+  const { data, width: w, height: h } = img;
+  // El color de la pizarra en cada zona: lo más oscuro de cada bloque (la tiza es poca y clara)
+  const bloque = Math.max(16, Math.round(Math.min(w, h) / 24));
+  const gw = Math.ceil(w / bloque), gh = Math.ceil(h / bloque);
+  const c = new Float32Array(gw * gh);
+  const hist = new Uint32Array(256);
+  for (let by = 0; by < gh; by++) for (let bx = 0; bx < gw; bx++) {
+    hist.fill(0);
+    const xa = bx * bloque, xb = Math.min(w, xa + bloque), ya = by * bloque, yb = Math.min(h, ya + bloque);
+    for (let y = ya; y < yb; y++) for (let x = xa; x < xb; x++) hist[L[y * w + x]]++;
+    const meta = (xb - xa) * (yb - ya) * 0.35;
+    let acum = 0, v = 0;
+    for (; v < 255; v++) { acum += hist[v]; if (acum >= meta) break; }
+    c[by * gw + bx] = v;
+  }
+  const suave = desenfocarCuadro(c, gw, gh);
+  // El color de la pizarra en toda la foto (para saber de qué color es la tiza)
+  let br = 0, bg = 0, bb = 0, n = 0;
+  const limite = [...suave].sort((a, b) => a - b)[Math.floor(suave.length / 2)] + 12;
+  for (let i = 0; i < L.length; i += 11) if (L[i] <= limite) { br += data[i * 4]; bg += data[i * 4 + 1]; bb += data[i * 4 + 2]; n++; }
+  if (n) { br /= n; bg /= n; bb /= n; }
+  const out = new Uint8ClampedArray(data.length);
+  recorrerSuave(suave, gw, gh, bloque, w, h, (fila, y) => {
+    for (let x = 0, i = y * w, j = y * w * 4; x < w; x++, i++, j += 4) {
+      const base = fila[x];
+      const s = (L[i] - base) / Math.max(40, 235 - base); // cuánta tiza hay
+      const s2 = s < 0.12 ? 0 : Math.min(1, Math.pow((s - 0.12) / 0.5, 0.8));
+      let tinta = [22, 24, 30];
+      if (s > 0.3) {
+        // Lo que la tiza le suma a la pizarra: si tiene color, la tinta es de ese color
+        const { tono, sat } = tonoDe(Math.max(0, data[j] - br), Math.max(0, data[j + 1] - bg), Math.max(0, data[j + 2] - bb));
+        if (sat > 0.35) tinta = tintaDeTono(tono);
+      }
+      out[j] = 255 + (tinta[0] - 255) * s2;
+      out[j + 1] = 255 + (tinta[1] - 255) * s2;
+      out[j + 2] = 255 + (tinta[2] - 255) * s2;
+      out[j + 3] = 255;
     }
   });
   return { data: out, width: w, height: h };

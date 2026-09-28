@@ -5,7 +5,8 @@ const CLAVE = 'scanlibre_ajustes';
 const FABRICA = {
   autoCaptura: false,     // tomar la foto sola cuando la hoja está quieta
   rafaga: false,          // varias fotos seguidas sin parar a revisar el recorte
-  libro: false,           // libro abierto: cada foto se separa en sus dos páginas
+  libro: false,           // (de antes) libro abierto: ahora es el modo 'libro'
+  modo: null,             // modo de la cámara: 'hoja', 'libro' (se separa en dos páginas), 'pizarra' o 'cedula'
   filtro: 'mejorada',     // filtro de las páginas nuevas
   pdfTamano: 'carta',
   pdfCalidad: 'normal',
@@ -28,3 +29,6 @@ export function cambiarAjuste(nombre, valor) {
   ajustes()[nombre] = valor;
   try { localStorage.setItem(CLAVE, JSON.stringify(actuales)); } catch (e) {}
 }
+
+/** El modo de la cámara (los que usaban "Libro" antes de que hubiera modos siguen en libro) */
+export const modoCamara = () => ajustes().modo || (ajustes().libro ? 'libro' : 'hoja');

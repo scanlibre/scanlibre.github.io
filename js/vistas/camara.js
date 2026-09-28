@@ -6,9 +6,9 @@
 //    sirve para escanear un cuaderno entero pasando las páginas.
 // La foto se toma con el teléfono quieto (giroscopio y video): así no sale movida.
 
-import { $, aviso } from '../util.js';
+import { $, aviso, menu } from '../util.js';
 import { ir, volver } from '../rutas.js';
-import { ajustes, cambiarAjuste } from '../ajustes.js';
+import { ajustes, cambiarAjuste, modoCamara } from '../ajustes.js';
 import { detectar, nitidez } from '../motor.js';
 import { aCanvas, aImageData, canvasABlob, normalizarFoto, soltarCanvas } from '../fotos.js';
 import { buscarHoja, crearPagina, crearPaginasDeLibro, encolar, importarArchivos, nuevoDocumento, pendientesEnCola, fotoBorrosa, esBorrosa, TODA_LA_FOTO } from '../paginas.js';
@@ -447,7 +447,10 @@ async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, 
     ms
   });
   const rafaga = ajustes().rafaga && !sesion.reemplazar;
-  const libro = ajustes().libro && !sesion.reemplazar; // al volver a tomar una página, es una sola
+  // Al volver a tomar una página es una sola hoja, con el filtro de siempre
+  const modo = sesion.reemplazar ? 'hoja' : modoCamara();
+  const libro = modo === 'libro';
+  const opciones = modo === 'pizarra' ? { filtro: 'pizarra' } : {};
   let esquinas = null, borrosa = false;
   if (!rafaga || auto) {
     esquinas = await buscarHoja(foto.canvas);
@@ -468,7 +471,7 @@ async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, 
     contarPagina(await miniaturaDe(foto.canvas));
     const n = sesion.cantidad;
     encolar(docId, async () => {
-      const paginas = libro ? await crearPaginasDeLibro(foto, esquinas || undefined) : [await crearPagina(foto, esquinas || undefined)];
+      const paginas = libro ? await crearPaginasDeLibro(foto, esquinas || undefined) : [await crearPagina(foto, esquinas || undefined, opciones)];
       if (paginas.some(esBorrosa)) aviso(`La foto ${n} salió borrosa: revísala en el documento.`, 'error', 5000);
       return paginas;
     });
@@ -504,7 +507,7 @@ async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, 
       }
       const miniatura = await miniaturaDe(foto.canvas); // antes: crearPagina suelta el canvas
       try {
-        await agregarPagina(docId, await crearPagina(foto, esq));
+        await agregarPagina(docId, await crearPagina(foto, esq, opciones));
       } catch (e) {
         URL.revokeObjectURL(miniatura);
         throw e;
@@ -537,7 +540,7 @@ async function desdeGaleria() {
   const archivos = await elegirArchivos('entrada-fotos');
   if (!archivos.length) return;
   const docId = await asegurarDocumento();
-  importarArchivos(docId, archivos);
+  importarArchivos(docId, archivos, modoCamara() === 'pizarra' ? { filtro: 'pizarra' } : {});
   sesion.cantidad += archivos.length;
   terminar();
 }
@@ -548,12 +551,23 @@ async function desdeCamaraDelTelefono() {
   try { await usarFoto(archivo); } catch (e) { aviso('No se pudo usar la foto.', 'error'); }
 }
 
+/** Los modos de la cámara */
+const MODOS = {
+  hoja: { corto: 'Hoja', icono: 'imagen', texto: 'Hoja: una página por foto', aviso: 'Una hoja por foto.' },
+  libro: { corto: 'Libro', icono: 'libro', texto: 'Libro abierto: las dos páginas en una foto', aviso: 'Libro: toma el libro abierto con las dos páginas; se separan solas.' },
+  pizarra: { corto: 'Pizarra', icono: 'pizarra', texto: 'Pizarra: blanca, verde o negra', aviso: 'Pizarra: queda con fondo blanco y el escrito oscuro y nítido (también la de tiza).' }
+};
+
 function pintarBotones() {
   if (!sesion) return;
   const a = ajustes();
   $('#camara-auto').setAttribute('aria-pressed', String(a.autoCaptura));
   $('#camara-rafaga').setAttribute('aria-pressed', String(a.rafaga));
-  $('#camara-libro').setAttribute('aria-pressed', String(a.libro));
+  const m = MODOS[modoCamara()] || MODOS.hoja;
+  $('#camara-modo-texto').textContent = m.corto;
+  $('#camara-modo-icono').setAttribute('href', '#i-' + m.icono);
+  $('#camara-modo').setAttribute('aria-label', `Modo: ${m.corto}. Tocar para cambiarlo`);
+  $('#camara-modo').classList.toggle('chip-activo', modoCamara() !== 'hoja');
   const hay = sesion.cantidad > 0;
   $('#camara-listo').hidden = !hay;
   $('#camara-hueco').hidden = hay;
@@ -595,9 +609,14 @@ export function iniciar() {
     aviso(ajustes().rafaga ? 'Ráfaga: toma varias fotos seguidas; las esquinas se ponen solas.' : 'Después de cada foto podrás ajustar las esquinas.');
     pintarBotones();
   });
-  $('#camara-libro').addEventListener('click', () => {
-    cambiarAjuste('libro', !ajustes().libro);
-    aviso(ajustes().libro ? 'Libro: toma el libro abierto con las dos páginas; se separan solas.' : 'Una hoja por foto.');
+  $('#camara-modo').addEventListener('click', async () => {
+    const opcion = await menu(Object.entries(MODOS).map(([valor, m]) => ({
+      valor, icono: m.icono, texto: `${m.texto}${valor === modoCamara() ? ' ✓' : ''}`
+    })), 'Qué vas a escanear');
+    if (!opcion || !sesion) return;
+    cambiarAjuste('modo', opcion);
+    cambiarAjuste('libro', opcion === 'libro');
+    aviso(MODOS[opcion].aviso, 'info', 4500);
     pintarBotones();
   });
   $('#camara-linterna').addEventListener('click', async e => {

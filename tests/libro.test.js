@@ -80,7 +80,9 @@ describe('Modo libro con la cámara', () => {
     const page = await env.pagina();
     await page.click('#inicio-escanear');
     await page.waitForSelector('#camara-disparar:not([disabled])', { timeout: 20000 });
-    await page.click('#camara-libro');
+    await page.click('#camara-modo');
+    await page.click('.menu-opcion:has-text("Libro abierto")');
+    await page.waitForFunction(m => document.querySelector('#camara-modo-texto').textContent === m, 'Libro');
     await page.waitForFunction(() => document.querySelector('#camara-pista').textContent === 'Hoja encontrada', null, { timeout: 20000 });
     await page.click('#camara-disparar');
     await page.waitForSelector('#vista-recorte:not([hidden])', { timeout: 20000 });

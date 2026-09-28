@@ -12,13 +12,15 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Toca para enfocar** en la parte de la hoja que quieras (si el teléfono lo permite).
 - **Aviso de foto borrosa:** ningún filtro arregla una foto movida o desenfocada, así que la app lo dice al momento y ofrece **Repetir foto**. Las páginas borrosas se marcan en el documento y se pueden **volver a tomar** sin perder su lugar.
 - **Enderezado real:** corrige la perspectiva y calcula la proporción verdadera de la hoja aunque la foto se haya tomado en ángulo.
+- **Modo de la cámara** (botón "Modo"): Hoja, Libro abierto o Pizarra.
+- **Modo pizarra:** pizarra blanca de marcador o verde/negra de tiza, siempre con fondo blanco y el escrito oscuro y nítido para leerla e imprimirla. En la blanca se van la sombra, el gris y el brillo de las lámparas; en la de tiza, la tiza pasa a trazo oscuro y la de color queda de su color. También es un filtro más en cada página.
 - **Modo libro:** una foto del libro abierto se vuelve dos páginas: la app busca el lomo (la franja sin letras y la sombra del doblez) y parte la hoja siguiendo la perspectiva. También con "Separar" en una página ya tomada.
 - **Quitar dedos:** los dedos que sostienen la hoja en los bordes se tapan con el color del papel (de piel clara a morena, también en sombra). Una hoja amarillenta o un dibujo en medio de la página no se tocan, y en cada página se puede deshacer.
 - **Páginas curvas de libros:** si la hoja no queda plana (cerca del lomo o con una esquina levantada), sigue los renglones de texto y los endereza. En una hoja plana no toca nada, y en cada página se puede deshacer.
 - **Esquinas a mano** con lupa; se ven sobre papel blanco y sobre fondos oscuros.
 - **Brillo y contraste a mano** en cada página, viendo cómo queda mientras se mueven las barras. El brillo aclara u oscurece los tonos medios sin ensuciar el papel blanco (sirve para el lápiz suave); en B/N cambia el grosor de las letras.
 - **Marcar la página:** resaltador de 4 colores que se endereza solo y se ajusta al renglón y a las palabras que tocas, lápiz para escribir o subrayar, notas adhesivas y **firma** (se dibuja una vez con el dedo y queda guardada). Las marcas se ven en la página, en la miniatura y en el PDF; se pueden deshacer, borrar o mover, y el texto se sigue leyendo sin ellas. Con dos dedos se acerca la página.
-- **Filtros:** Original, Mejorada (papel blanco sin sombras y sin saturar los colores), Dibujo (para lápiz y bocetos: se ven hasta los trazos más suaves), Gris y B/N (umbral local tipo Sauvola: no se come el texto suave ni deja manchas negras con la sombra del lomo de un libro).
+- **Filtros:** Original, Mejorada (papel blanco sin sombras y sin saturar los colores), Dibujo (para lápiz y bocetos: se ven hasta los trazos más suaves), Gris, B/N (umbral local tipo Sauvola: no se come el texto suave ni deja manchas negras con la sombra del lomo de un libro) y Pizarra.
 - **Texto (OCR), gratis y sin internet:** copiar o compartir el texto de una página o de todo el documento, en español, inglés o los dos. Y **PDF con texto buscable**: se ve igual, pero se pueden buscar y copiar las palabras. Antes de leer, la página se prepara (papel parejo, más contraste y nitidez): así lee también la letra chica de un libro.
 - **El texto a Word (.docx)** para seguir trabajándolo, con los renglones de cada párrafo juntados y las listas aparte.
 - **Escuchar el texto** con la voz del teléfono, frase por frase, con pausa.
@@ -107,7 +109,8 @@ Lo que sigue sale de lo que la gente les pide y les reclama a CamScanner, Genius
 **Fase 3**
 - ✅ Corrección de páginas curvas (libros).
 - ✅ Modo libro (las dos páginas de una foto).
-- Modo cédula (las dos caras en una hoja) y modo pizarra.
+- ✅ Modo pizarra.
+- Modo cédula (las dos caras en una hoja).
 - Respaldo cifrado opcional en la nube (Supabase, como las fotos de Mi Pisto HN).
 - Publicación en Google Play (TWA con PWABuilder).
 

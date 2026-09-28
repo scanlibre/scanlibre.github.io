@@ -107,7 +107,7 @@ describe('La app', () => {
     await importarFoto(page, foto1.ruta);
     await page.click('#doc-paginas .miniatura');
     const filtros = await page.$$eval('#pagina-filtros .filtro', bs => bs.map(b => b.textContent));
-    assert.deepEqual(filtros, ['Original', 'Mejorada', 'Dibujo', 'Gris', 'B/N']);
+    assert.deepEqual(filtros, ['Original', 'Mejorada', 'Dibujo', 'Gris', 'B/N', 'Pizarra']);
     // En un teléfono angosto el primer botón no queda cortado
     const caja = await page.locator('#pagina-filtros .filtro').first().boundingBox();
     assert.ok(caja.x >= 0, `el primer filtro empieza en x=${caja.x}`);

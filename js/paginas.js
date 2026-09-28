@@ -52,8 +52,7 @@ async function renderizar(fuente, { esquinas, filtro, rotacion, aplanar = true, 
  * Página nueva a partir de una foto ya normalizada ({ blob, ancho, alto, canvas }).
  * Si todo sale bien, el canvas de la foto se suelta: ya no se necesita.
  */
-export async function crearPagina(foto, esquinas, { soltar = true } = {}) {
-  const filtro = ajustes().filtro;
+export async function crearPagina(foto, esquinas, { soltar = true, filtro = ajustes().filtro } = {}) {
   const esq = esquinas || await buscarHoja(foto.canvas) || TODA_LA_FOTO;
   const r = await renderizar(foto.canvas, { esquinas: esq, filtro, rotacion: 0 });
   if (soltar) soltarCanvas(foto.canvas);
@@ -235,7 +234,7 @@ export const pendientesEnCola = docId => pendientes.get(docId) || 0;
 export const colaVacia = () => pendientes.size === 0;
 
 /** Fotos de la galería o de un archivo: cada una se normaliza, se busca la hoja y se guarda */
-export function importarArchivos(docId, archivos) {
-  for (const archivo of archivos) encolar(docId, async () => crearPagina(await normalizarFoto(archivo)));
+export function importarArchivos(docId, archivos, { filtro } = {}) {
+  for (const archivo of archivos) encolar(docId, async () => crearPagina(await normalizarFoto(archivo), undefined, filtro ? { filtro } : {}));
   return cadena;
 }

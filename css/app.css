@@ -154,7 +154,7 @@ img { display: block; }
   backdrop-filter: blur(6px);
 }
 .chip .icono { width: 18px; height: 18px; }
-.chip[aria-pressed="true"] { background: var(--marca); color: var(--marca-texto); border-color: transparent; }
+.chip[aria-pressed="true"], .chip.chip-activo { background: var(--marca); color: var(--marca-texto); border-color: transparent; }
 
 /* ── Inicio ─────────────────────────────────────────────────────── */
 /* Carpetas: una fila que se desliza de lado */
