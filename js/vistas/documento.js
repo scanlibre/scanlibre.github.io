@@ -12,7 +12,7 @@ import { mostrarTexto } from './texto.js';
 import { nuevaSesion } from './camara.js';
 import { elegirArchivos } from '../archivos.js';
 import { ajustes, cambiarAjuste } from '../ajustes.js';
-import { CALIDADES, TAMANOS_HOJA, generarPDF, puedeCompartir, compartir, descargar } from '../exportar.js';
+import { CALIDADES, TAMANOS_HOJA, generarPDF, generarPDFConLimite, puedeCompartir, compartir, descargar } from '../exportar.js';
 
 let docId = null;
 let urls = [];
@@ -460,14 +460,18 @@ async function crearPDF({ soloIds = null, nombre: nombrePDF = null } = {}) {
   const doc = await obtenerDocumento(docId);
   const paginas = await paginasDe(soloIds ? { paginas: doc.paginas.filter(id => soloIds.includes(id)) } : doc);
   if (!paginas.length) return;
-  const eleccion = { tamano: ajustes().pdfTamano, calidad: ajustes().pdfCalidad, texto: ajustes().pdfTexto };
+  const eleccion = {
+    tamano: ajustes().pdfTamano, calidad: ajustes().pdfCalidad, texto: ajustes().pdfTexto,
+    porHoja: String(ajustes().pdfPorHoja || 1), limite: ajustes().pdfLimite || 2
+  };
 
   await hoja(cerrar => {
-    const grupo = (titulo, clave, valores, fila) => {
+    const grupo = (titulo, clave, valores, fila, alElegir) => {
       const botones = Object.entries(valores).map(([valor, v]) => {
-        const b = el('button', { class: 'opcion', 'aria-pressed': String(eleccion[clave] === valor), onclick: () => {
+        const b = el('button', { class: 'opcion', 'aria-pressed': String(eleccion[clave] === valor), 'data-valor': valor, onclick: () => {
           eleccion[clave] = valor;
           botones.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+          alElegir?.(valor);
         } },
           el('strong', { text: typeof v === 'string' ? v : v.texto }),
           typeof v !== 'string' && el('small', { text: v.detalle }));
@@ -511,6 +515,8 @@ async function crearPDF({ soloIds = null, nombre: nombrePDF = null } = {}) {
       cambiarAjuste('pdfTamano', eleccion.tamano);
       cambiarAjuste('pdfCalidad', eleccion.calidad);
       cambiarAjuste('pdfTexto', eleccion.texto);
+      cambiarAjuste('pdfPorHoja', Number(eleccion.porHoja));
+      cambiarAjuste('pdfLimite', eleccion.limite);
       try {
         // Con texto: primero se lee cada página (lo ya leído no se vuelve a leer)
         let conOcr = paginas;
@@ -530,7 +536,21 @@ async function crearPDF({ soloIds = null, nombre: nombrePDF = null } = {}) {
           }
           estado.textContent = 'Armando el PDF…';
         }
-        const blob = await generarPDF({ ...doc, nombre: nombrePDF || doc.nombre }, conOcr, { ...eleccion, conTexto: eleccion.texto, contrasena }, (hechas, total) => avance(parteOcr + (1 - parteOcr) * hechas / total));
+        const datos = { ...doc, nombre: nombrePDF || doc.nombre };
+        const comun = { tamano: eleccion.tamano, conTexto: eleccion.texto, contrasena, porHoja: Number(eleccion.porHoja) };
+        let blob, excedido = false;
+        if (eleccion.calidad === 'limite') {
+          // Los megas de las plataformas suelen ser de 1 000 000 bytes: así cabe en todas
+          const r = await generarPDFConLimite(datos, conOcr, { ...comun, limite: eleccion.limite * 1e6 }, (hechas, total, { intento }) => {
+            estado.hidden = false;
+            estado.textContent = intento > 1 ? `Ajustando el tamaño (prueba ${intento})…` : 'Armando el PDF…';
+            avance(parteOcr + (1 - parteOcr) * Math.min(0.95, (intento - 1 + hechas / total) / 3));
+          });
+          ({ blob, excedido } = r);
+        } else {
+          blob = await generarPDF(datos, conOcr, { ...comun, calidad: eleccion.calidad }, (hechas, total) => avance(parteOcr + (1 - parteOcr) * hechas / total));
+        }
+        if (excedido) aviso(`No se pudo bajar de ${tamanoLegible(blob.size)}: tiene muchas páginas. Prueba con 2 páginas por hoja o dividiendo el documento.`, 'error', 7000);
         estado.hidden = true;
         const nombre = nombreArchivo(nombrePDF || doc.nombre, 'pdf');
         progreso.hidden = true;
@@ -538,7 +558,7 @@ async function crearPDF({ soloIds = null, nombre: nombrePDF = null } = {}) {
         opciones.hidden = true;
         resultado.replaceChildren(
           el('div', { class: 'resultado-pdf' }, icono('pdf'),
-            el('div', {}, el('strong', { text: nombre }), el('small', { text: [paginasTexto(paginas.length), tamanoLegible(blob.size), contrasena && 'con contraseña'].filter(Boolean).join(' · ') }))),
+            el('div', {}, el('strong', { text: nombre }), el('small', { text: [paginasTexto(paginas.length), tamanoLegible(blob.size), eleccion.calidad === 'limite' && !excedido && `menos de ${eleccion.limite} MB`, Number(eleccion.porHoja) > 1 && `${eleccion.porHoja} por hoja`, contrasena && 'con contraseña'].filter(Boolean).join(' · ') }))),
           el('div', { class: 'hoja-botones' },
             el('button', { class: 'boton boton-secundario', onclick: () => { descargar(blob, nombre); aviso('PDF descargado.', 'exito'); } }, icono('descargar'), 'Descargar'),
             puedeCompartir(blob, nombre) && el('button', { class: 'boton boton-primario', onclick: async () => {
@@ -552,9 +572,18 @@ async function crearPDF({ soloIds = null, nombre: nombrePDF = null } = {}) {
         estado.hidden = true;
       }
     } }, icono('pdf'), 'Crear PDF');
+    // "Que pese menos de…": los megas se eligen aparte
+    const megas = [1, 2, 5, 10].map(mb => el('button', { class: 'filtro', 'aria-pressed': String(eleccion.limite === mb), 'data-mb': mb, onclick: e => {
+      eleccion.limite = mb;
+      for (const x of e.currentTarget.parentElement.children) x.setAttribute('aria-pressed', String(x === e.currentTarget));
+    } }, `${mb} MB`));
+    const filaMegas = el('div', { class: 'megas', role: 'group', 'aria-label': 'Que pese menos de', hidden: eleccion.calidad !== 'limite' }, megas);
+    const calidades = { ...CALIDADES, limite: { texto: 'Que pese menos de…', detalle: 'Para plataformas con límite: la app ajusta la calidad sola' } };
     const opciones = el('div', {},
       grupo('Tamaño de hoja', 'tamano', TAMANOS_HOJA, true),
-      grupo('Calidad', 'calidad', CALIDADES, false),
+      grupo('Páginas por hoja', 'porHoja', { 1: { texto: 'Una', detalle: 'Como siempre' }, 2: { texto: 'Dos', detalle: 'La mitad de hojas' }, 4: { texto: 'Cuatro', detalle: 'Un cuarto' } }, true),
+      grupo('Calidad', 'calidad', calidades, false, valor => { filaMegas.hidden = valor !== 'limite'; }),
+      filaMegas,
       el('div', { class: 'grupo' }, el('h3', { class: 'grupo-titulo', text: 'Texto' }), el('div', { class: 'opciones' }, conTexto)),
       el('div', { class: 'grupo' }, el('h3', { class: 'grupo-titulo', text: 'Contraseña' }), el('div', { class: 'opciones' }, conClave), campoClave));
     return [

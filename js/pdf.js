@@ -113,52 +113,101 @@ function capaDeTexto({ ancho, alto, lineas }, dx, dy, dw, dh) {
   return s + 'ET';
 }
 
+/** Ancho, alto y diccionario de la imagen de una página */
+function imagenDe(pag) {
+  if (pag.tipo === 'jpeg') {
+    const inf = infoJPEG(pag.bytes);
+    const color = inf.canales === 1 ? '/DeviceGray' : inf.canales === 4 ? '/DeviceCMYK' : '/DeviceRGB';
+    return { ancho: inf.ancho, alto: inf.alto, dicc: `/ColorSpace ${color} /BitsPerComponent 8 /Filter /DCTDecode` };
+  }
+  return { ancho: pag.ancho, alto: pag.alto, dicc: '/ColorSpace /DeviceGray /BitsPerComponent 1 /Filter /FlateDecode' };
+}
+
+const MARGEN = 18, ENTRE = 14; // puntos, con varias páginas por hoja
+
+/**
+ * Dónde va cada página en su hoja. Con una por hoja, la hoja toma la forma
+ * de la imagen (vertical u horizontal). Con 2 o 4 por hoja (para imprimir
+ * más barato), en casillas: páginas paradas van de lado a lado en una hoja
+ * acostada (2) o en 2 × 2 en una hoja parada (4); las acostadas, al revés.
+ * @returns [{ pw, ph, casillas: [{ i, dx, dy, dw, dh }] }]
+ */
+function hojasDe(imgs, tamano, porHoja) {
+  const hojas = [];
+  if (porHoja <= 1) {
+    imgs.forEach(({ ancho, alto }, i) => {
+      let pw, ph;
+      if (tamano === 'foto' || !TAMANOS[tamano]) {
+        const k = 792 / Math.max(ancho, alto);
+        pw = ancho * k; ph = alto * k;
+      } else {
+        [pw, ph] = TAMANOS[tamano];
+        if (ancho > alto) [pw, ph] = [ph, pw];
+      }
+      const k = Math.min(pw / ancho, ph / alto);
+      const dw = ancho * k, dh = alto * k;
+      hojas.push({ pw, ph, casillas: [{ i, dx: (pw - dw) / 2, dy: (ph - dh) / 2, dw, dh }] });
+    });
+    return hojas;
+  }
+  const paradas = imgs.filter(m => m.alto >= m.ancho).length >= imgs.length / 2;
+  let [pw, ph] = TAMANOS[tamano] || TAMANOS.carta;
+  // Dos paradas: hoja acostada; cuatro paradas: hoja parada (y al revés con las acostadas)
+  if ((porHoja === 2) === paradas) [pw, ph] = [ph, pw];
+  const cols = porHoja === 2 ? (paradas ? 2 : 1) : 2, filas = porHoja / cols;
+  const cw = (pw - 2 * MARGEN - (cols - 1) * ENTRE) / cols, ch = (ph - 2 * MARGEN - (filas - 1) * ENTRE) / filas;
+  for (let inicio = 0; inicio < imgs.length; inicio += porHoja) {
+    const casillas = [];
+    for (let c = 0; c < porHoja && inicio + c < imgs.length; c++) {
+      const i = inicio + c, { ancho, alto } = imgs[i];
+      const col = c % cols, fila = Math.floor(c / cols);
+      const k = Math.min(cw / ancho, ch / alto), dw = ancho * k, dh = alto * k;
+      const x = MARGEN + col * (cw + ENTRE), y = ph - MARGEN - (fila + 1) * ch - fila * ENTRE; // de arriba hacia abajo
+      casillas.push({ i, dx: x + (cw - dw) / 2, dy: y + (ch - dh) / 2, dw, dh });
+    }
+    hojas.push({ pw, ph, casillas });
+  }
+  return hojas;
+}
+
 /**
  * Los objetos del PDF, todavía sin escribir: así se pueden cifrar antes.
  * Un objeto es { n, cuerpo } o, si lleva datos, { n, dicc, flujo } (el /Length se pone al escribir).
+ * @param porHoja 1, 2 o 4 páginas en cada hoja
  */
-function armar(paginas, { tamano = 'carta', titulo = 'Escaneo', fecha = new Date() } = {}) {
+function armar(paginas, { tamano = 'carta', titulo = 'Escaneo', fecha = new Date(), porHoja = 1 } = {}) {
   if (!paginas.length) throw new Error('El documento no tiene páginas');
-  const PRIMERA = 5; // 1 catálogo, 2 páginas, 3 datos, 4 letra del texto invisible
+  // 1 catálogo, 2 páginas, 3 datos, 4 letra del texto invisible; desde el 5, cada hoja: hoja, dibujo e imágenes
   const objetos = [];
-  const kids = paginas.map((_, i) => `${PRIMERA + i * 3} 0 R`).join(' ');
-  objetos.push({ n: 2, cuerpo: `<< /Type /Pages /Kids [${kids}] /Count ${paginas.length} >>` });
   objetos.push({ n: 4, cuerpo: '<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>' });
-
-  paginas.forEach((pag, i) => {
-    const nPag = PRIMERA + i * 3, nCont = nPag + 1, nImg = nPag + 2;
-    let ancho, alto, dicc;
-    if (pag.tipo === 'jpeg') {
-      const inf = infoJPEG(pag.bytes);
-      ({ ancho, alto } = inf);
-      const color = inf.canales === 1 ? '/DeviceGray' : inf.canales === 4 ? '/DeviceCMYK' : '/DeviceRGB';
-      dicc = `/ColorSpace ${color} /BitsPerComponent 8 /Filter /DCTDecode`;
-    } else {
-      ({ ancho, alto } = pag);
-      dicc = '/ColorSpace /DeviceGray /BitsPerComponent 1 /Filter /FlateDecode';
-    }
-    // Hoja: vertical u horizontal según la imagen; la imagen se centra ocupando lo más posible
-    let pw, ph;
-    if (tamano === 'foto' || !TAMANOS[tamano]) {
-      const k = 792 / Math.max(ancho, alto);
-      pw = ancho * k; ph = alto * k;
-    } else {
-      [pw, ph] = TAMANOS[tamano];
-      if (ancho > alto) [pw, ph] = [ph, pw];
-    }
-    const k = Math.min(pw / ancho, ph / alto);
-    const dw = ancho * k, dh = alto * k, dx = (pw - dw) / 2, dy = (ph - dh) / 2;
-    const conTexto = pag.texto?.lineas?.length > 0;
-    let dibujo = `q ${num(dw)} 0 0 ${num(dh)} ${num(dx)} ${num(dy)} cm /Im0 Do Q`;
-    if (conTexto) dibujo += '\n' + capaDeTexto(pag.texto, dx, dy, dw, dh);
+  const imgs = paginas.map(imagenDe);
+  const hojas = hojasDe(imgs, tamano, [1, 2, 4].includes(porHoja) ? porHoja : 1);
+  const varias = hojas.some(h => h.casillas.length > 1) || porHoja > 1;
+  let n = 5;
+  const kids = [];
+  for (const { pw, ph, casillas } of hojas) {
+    const nPag = n++, nCont = n++;
+    kids.push(`${nPag} 0 R`);
+    let dibujo = '', conTexto = false;
+    const recursos = [];
+    casillas.forEach(({ i, dx, dy, dw, dh }, k) => {
+      const nImg = n++, pag = paginas[i], { ancho, alto, dicc } = imgs[i];
+      objetos.push({ n: nImg, dicc: `<< /Type /XObject /Subtype /Image /Width ${ancho} /Height ${alto} ${dicc}`, flujo: pag.bytes });
+      recursos.push(`/Im${k} ${nImg} 0 R`);
+      dibujo += `${dibujo ? '\n' : ''}q ${num(dw)} 0 0 ${num(dh)} ${num(dx)} ${num(dy)} cm /Im${k} Do Q`;
+      // Con varias por hoja, una raya gris fina alrededor de cada página
+      if (varias) dibujo += `\nq 0.75 G 0.5 w ${num(dx)} ${num(dy)} ${num(dw)} ${num(dh)} re S Q`;
+      if (pag.texto?.lineas?.length) { conTexto = true; dibujo += '\n' + capaDeTexto(pag.texto, dx, dy, dw, dh); }
+    });
     const letra = conTexto ? ' /Font << /F1 4 0 R >>' : '';
-    objetos.push({ n: nPag, cuerpo: `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(pw)} ${num(ph)}] /Resources << /XObject << /Im0 ${nImg} 0 R >>${letra} /ProcSet [/PDF /Text /ImageB /ImageC] >> /Contents ${nCont} 0 R >>` });
+    objetos.push({ n: nPag, cuerpo: `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(pw)} ${num(ph)}] /Resources << /XObject << ${recursos.join(' ')} >>${letra} /ProcSet [/PDF /Text /ImageB /ImageC] >> /Contents ${nCont} 0 R >>` });
     objetos.push({ n: nCont, dicc: '<<', flujo: texto.encode(dibujo) });
-    objetos.push({ n: nImg, dicc: `<< /Type /XObject /Subtype /Image /Width ${ancho} /Height ${alto} ${dicc}`, flujo: pag.bytes });
-  });
+  }
+  objetos.push({ n: 2, cuerpo: `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${kids.length} >>` });
+  objetos.sort((a, b) => a.n - b.n);
   // Los datos del documento: textos sueltos (se cifran aparte si hay contraseña)
   const info = { Title: utf16(titulo), Producer: texto.encode('ScanLibre'), Creator: texto.encode('ScanLibre'), CreationDate: texto.encode(fechaPDF(fecha)) };
-  return { objetos, info, total: PRIMERA + paginas.length * 3 };
+  return { objetos, info, total: n };
 }
 
 /** Escribe el archivo: encabezado, objetos, tabla xref y trailer */
@@ -201,6 +250,7 @@ function escribir({ objetos, info, total }, { cifrado = null } = {}) {
  * @param paginas [{ tipo: 'jpeg', bytes } | { tipo: 'bits', bytes (zlib), ancho, alto }],
  *                cada una puede traer `texto` ({ ancho, alto, lineas }, del lector de texto)
  * @param opciones.tamano 'carta' | 'a4' | 'foto' (la hoja toma la forma de la imagen)
+ * @param opciones.porHoja 1, 2 o 4 páginas en cada hoja
  * @returns Uint8Array con el archivo
  */
 export function crearPDF(paginas, opciones) {

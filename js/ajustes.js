@@ -11,6 +11,8 @@ const FABRICA = {
   pdfTamano: 'carta',
   pdfCalidad: 'normal',
   pdfTexto: false,        // PDF con el texto leído (se puede buscar y copiar)
+  pdfPorHoja: 1,          // páginas en cada hoja del PDF (1, 2 o 4)
+  pdfLimite: 2,           // con la calidad "Que pese menos de…": los MB
   ocrIdioma: 'spa',
   carpeta: null           // carpeta elegida en el inicio: lo que se escanea se guarda ahí
 };

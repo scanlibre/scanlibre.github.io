@@ -98,6 +98,40 @@ describe('PDF', () => {
     assert.doesNotMatch(s, /\/Font << \/F1/);
   });
 
+  it('dos páginas paradas por hoja: la hoja se acuesta y van de lado a lado', () => {
+    const gris = { tipo: 'jpeg', bytes: JPEG_GRIS_10x20 };
+    const s = revisarEstructura(crearPDF([gris, gris, gris], { tamano: 'carta', porHoja: 2 }));
+    assert.equal((s.match(/\/Type \/Page /g) || []).length, 2, 'tres páginas en dos hojas');
+    assert.equal((s.match(/\/Subtype \/Image/g) || []).length, 3);
+    assert.match(s, /\/MediaBox \[0 0 792 612\]/);
+    const [a, b] = [...s.matchAll(/q ([\d.]+) 0 0 ([\d.]+) ([\d.]+) ([\d.]+) cm \/Im(\d) Do Q/g)].map(m => m.slice(1, 6).map(Number));
+    assert.equal(a[4], 0); assert.equal(b[4], 1);
+    assert.ok(a[2] + a[0] <= 396 && b[2] >= 396, 'una a cada lado del medio');
+    assert.match(s, /re S Q/, 'con raya alrededor para recortar');
+  });
+
+  it('cuatro por hoja van en 2 × 2, de izquierda a derecha y de arriba abajo', () => {
+    const gris = { tipo: 'jpeg', bytes: JPEG_GRIS_10x20 };
+    const s = revisarEstructura(crearPDF([gris, gris, gris, gris, gris], { tamano: 'a4', porHoja: 4 }));
+    assert.equal((s.match(/\/Type \/Page /g) || []).length, 2);
+    assert.match(s, /\/MediaBox \[0 0 595.28 841.89\]/);
+    const casillas = [...s.matchAll(/q ([\d.]+) 0 0 ([\d.]+) ([\d.]+) ([\d.]+) cm \/Im(\d) Do Q/g)].slice(0, 4).map(m => ({ x: +m[3], y: +m[4], k: +m[5] }));
+    assert.deepEqual(casillas.map(c => c.k), [0, 1, 2, 3]);
+    assert.ok(casillas[0].x < casillas[1].x && casillas[0].y === casillas[1].y);
+    assert.ok(casillas[2].y < casillas[0].y && casillas[2].x === casillas[0].x);
+  });
+
+  it('dos acostadas por hoja van una arriba de la otra, cada una con su texto', () => {
+    const conTexto = { tipo: 'jpeg', bytes: JPEG_COLOR_16x8, texto: { ancho: 16, alto: 8, lineas: [{ y0: 1, y1: 7, base: null, palabras: [{ t: 'Hola', x0: 1, y0: 1, x1: 15, y1: 7 }] }] } };
+    const s = revisarEstructura(crearPDF([conTexto, conTexto], { tamano: 'carta', porHoja: 2 }));
+    assert.match(s, /\/MediaBox \[0 0 612 792\]/);
+    const [a, b] = [...s.matchAll(/cm \/Im\d Do Q/g)].map(m => m.index);
+    assert.ok(a < b);
+    const ys = [...s.matchAll(/q [\d.]+ 0 0 [\d.]+ ([\d.]+) ([\d.]+) cm/g)].map(m => +m[2]);
+    assert.ok(ys[0] > ys[1], 'la primera arriba');
+    assert.equal((s.match(/BT 3 Tr/g) || []).length, 2, 'el texto de las dos');
+  });
+
   it('un documento sin páginas no se puede exportar', () => {
     assert.throws(() => crearPDF([]), /no tiene páginas/);
   });

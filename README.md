@@ -32,7 +32,8 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Importar un PDF** (desde "Importar" o "Agregar"): cada página queda como una página más, que se puede marcar, firmar, filtrar o juntar con páginas escaneadas. Si el PDF trae texto, se guarda con cada página en su lugar: se puede buscar, copiar y escuchar sin leerlo con el OCR. Si tiene contraseña, la pide.
 - **Unir y dividir documentos:** unir otro documento al final de este, dividir desde una página (de ahí en adelante, un documento nuevo) o pasar las páginas elegidas a otro documento.
 - **Elegir varias páginas** (mantener presionada una sin moverla): girarlas, cambiarles el filtro, pasarlas a un documento nuevo o a otro que ya existe, hacer el PDF solo de esas o eliminarlas de una vez.
-- **PDF** en tamaño carta, A4 o con la forma de la foto, y en tres calidades. La calidad *Liviana* sirve para subir a plataformas con límite de tamaño. Las páginas en B/N van a 1 bit por píxel: nítidas y livianas (unos 50 KB por página).
+- **PDF** en tamaño carta, A4 o con la forma de la foto, y en tres calidades. La calidad *Liviana* sirve para subir a plataformas con límite de tamaño, y con **"Que pese menos de…"** (1, 2, 5 o 10 MB) la app busca sola la mejor calidad que quepa.
+- **2 o 4 páginas por hoja** para imprimir más barato: las páginas paradas van de lado a lado en una hoja acostada (2) o en 2 × 2 (4), con una raya fina para recortarlas y con el texto buscable de cada una. Las páginas en B/N van a 1 bit por píxel: nítidas y livianas (unos 50 KB por página).
 - **PDF con contraseña, gratis:** cifrado AES-256 estándar (el que abren Adobe, Chrome y los visores de Android e iPhone). La contraseña no se guarda en ningún lado.
 - **Compartir** directo a WhatsApp, Drive o Classroom, o descargar el PDF.
 - **Respaldo gratis:** todos los documentos en un `.zip` para guardar donde quieras y restaurarlos en otro teléfono.

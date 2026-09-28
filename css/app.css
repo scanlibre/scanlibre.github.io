@@ -563,6 +563,8 @@ mark { background: var(--marca-suave); color: var(--texto); border-radius: 3px; 
 .opcion small { color: var(--texto-2); font-size: 0.82rem; }
 .opcion[aria-pressed="true"] { border-color: var(--marca); background: var(--marca-suave); }
 
+.megas { display: flex; gap: 6px; margin-top: 8px; }
+.megas .filtro { flex: 1; }
 .progreso { height: 8px; border-radius: 4px; background: var(--superficie-2); overflow: hidden; margin: 14px 0 6px; }
 .progreso > span { display: block; height: 100%; width: 0; background: var(--marca); transition: width 0.2s; }
 .resultado-pdf {
