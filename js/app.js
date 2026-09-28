@@ -15,7 +15,7 @@ const vistas = { inicio, camara, recorte, documento, pagina, marcar };
 for (const v of Object.values(vistas)) v.iniciar();
 registrarVistas(vistas);
 
-eventosPaginas.addEventListener('error', () => aviso('No se pudo procesar una de las fotos.', 'error'));
+eventosPaginas.addEventListener('error', e => aviso(e.detail?.pdf ? `No se pudo abrir el PDF: ${e.detail.error?.message || e.detail.error}` : 'No se pudo procesar una de las páginas.', 'error', 6000));
 
 iniciarRutas();
 

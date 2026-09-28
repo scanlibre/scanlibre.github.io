@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 const RAIZ = fileURLToPath(new URL('..', import.meta.url));
 const TIPOS = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg'
+  '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg',
+  '.mjs': 'text/javascript; charset=utf-8', '.wasm': 'application/wasm', '.pdf': 'application/pdf'
 };
 
 export function servir() {

@@ -11,6 +11,7 @@ import { nuevoId, nombrePorDefecto, fechaDeClase } from './util.js';
 import { ajustes } from './ajustes.js';
 import { dibujarMarcas, girarMarcas } from './marcas.js';
 import { hojaDeCedula } from './cedula.js';
+import { esPDF, abrirPDF } from './importar.js';
 
 export const TODA_LA_FOTO = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }];
 
@@ -125,7 +126,11 @@ export async function reprocesar(pagina, cambios) {
   bitmap.close?.();
   // El texto leído ya no corresponde a la página nueva
   const nueva = { ...pagina, ...datos, ...r, ocr: null };
-  if (pagina.modo === 'cedula') nueva.nitidez = null;
+  if (pagina.modo === 'cedula' || pagina.modo === 'pdf') nueva.nitidez = null;
+  // El texto que traía el PDF sigue valiendo si la página no cambió de forma (otro filtro o brillo)
+  const mismaForma = ['esquinas', 'rotacion', 'aplanar', 'dedos'].every(k => JSON.stringify(datos[k]) === JSON.stringify(k === 'aplanar' || k === 'dedos' ? pagina[k] !== false : pagina[k]))
+    && r.procAncho === pagina.procAncho && r.procAlto === pagina.procAlto;
+  if (pagina.ocr?.idioma === 'pdf' && mismaForma) nueva.ocr = { ...pagina.ocr, version: versionDe(nueva) };
   await guardarPagina(nueva);
   const doc = await obtenerDocumento(pagina.docId);
   if (doc) { doc.modificado = Date.now(); await guardarDocumento(doc); }
@@ -189,7 +194,8 @@ export const textoLeido = p => (p.ocr && p.ocr.version === versionDe(p) ? p.ocr.
  * idioma, no se vuelve a leer. El resultado se guarda con la página.
  */
 export async function textoDePagina(pagina, { idioma = 'spa', alAvanzar } = {}) {
-  if (pagina.ocr && pagina.ocr.idioma === idioma && pagina.ocr.version === versionDe(pagina)) return pagina.ocr;
+  // El texto que traía el PDF vale para cualquier idioma: es el de verdad
+  if (pagina.ocr && (pagina.ocr.idioma === idioma || pagina.ocr.idioma === 'pdf') && pagina.ocr.version === versionDe(pagina)) return pagina.ocr;
   const { leerTexto } = await import('./ocr.js');
   const version = versionDe(pagina);
   const ocr = { ...(await leerTexto(pagina.procesada, { idioma, alAvanzar })), ancho: pagina.procAncho, alto: pagina.procAlto, version };
@@ -250,7 +256,58 @@ export const pendientesEnCola = docId => pendientes.get(docId) || 0;
 export const colaVacia = () => pendientes.size === 0;
 
 /** Fotos de la galería o de un archivo: cada una se normaliza, se busca la hoja y se guarda */
-export function importarArchivos(docId, archivos, { filtro } = {}) {
-  for (const archivo of archivos) encolar(docId, async () => crearPagina(await normalizarFoto(archivo), undefined, filtro ? { filtro } : {}));
+export function importarArchivos(docId, archivos, { filtro, pedirClave } = {}) {
+  for (const archivo of archivos) {
+    if (esPDF(archivo)) importarPDF(docId, archivo, { pedirClave });
+    else encolar(docId, async () => crearPagina(await normalizarFoto(archivo), undefined, filtro ? { filtro } : {}));
+  }
   return cadena;
+}
+
+/**
+ * Las páginas de un PDF, una por una por la cola. Mientras se abre el PDF, en
+ * el documento se ve una página "procesando".
+ * @returns cuántas páginas tiene (0 si no se abrió)
+ */
+export async function importarPDF(docId, archivo, { pedirClave } = {}) {
+  let listo;
+  const abriendo = new Promise(r => { listo = r; });
+  encolar(docId, async () => { await abriendo; return []; }); // marca "procesando" mientras abre
+  let pdf;
+  try {
+    pdf = await abrirPDF(archivo, { pedirClave });
+  } catch (e) {
+    listo();
+    avisar('error', { docId, error: e, pdf: true });
+    return 0;
+  }
+  if (!pdf) { listo(); return 0; }
+  let hechas = 0;
+  for (let n = 1; n <= pdf.paginas; n++) {
+    encolar(docId, async () => {
+      try {
+        const { canvas, texto } = await pdf.pagina(n);
+        try { return await crearPaginaDeImagen(canvas, texto, 'pdf'); } finally { soltarCanvas(canvas); }
+      } finally {
+        if (++hechas === pdf.paginas) pdf.cerrar();
+      }
+    });
+  }
+  listo();
+  return pdf.paginas;
+}
+
+/**
+ * Una página que ya viene lista (de un PDF): no se endereza, no se buscan
+ * dedos y va con el filtro Original. Si trae texto, queda como texto leído.
+ */
+async function crearPaginaDeImagen(canvas, texto, modo) {
+  const original = await canvasABlob(canvas, 'image/jpeg', 0.9);
+  const datos = { esquinas: TODA_LA_FOTO, filtro: 'original', rotacion: 0, aplanar: false, dedos: false };
+  const r = await renderizar(canvas, datos);
+  const pagina = { id: nuevoId(), original, ancho: canvas.width, alto: canvas.height, ...datos, modo, creada: Date.now(), ...r, nitidez: null };
+  if (texto?.lineas?.length) {
+    pagina.ocr = { idioma: 'pdf', texto: texto.texto, lineas: texto.lineas, ancho: canvas.width, alto: canvas.height, version: versionDe(pagina) };
+  }
+  return pagina;
 }

@@ -1,8 +1,9 @@
 // ScanLibre · vistas/inicio.js
 // La lista de documentos, el botón de escanear y el menú de respaldo.
 
-import { $, el, icono, fechaCorta, paginasTexto, aviso, menu, hoja, confirmar, pedirTexto, tamanoLegible, nuevoId } from '../util.js';
-import { listarDocumentos, obtenerPagina, listarCarpetas, guardarCarpeta, borrarCarpeta, listarPaginas } from '../db.js';
+import { $, el, icono, fechaCorta, paginasTexto, aviso, menu, hoja, confirmar, pedirTexto, tamanoLegible, nuevoId, pedirClaveDePDF } from '../util.js';
+import { listarDocumentos, obtenerPagina, listarCarpetas, guardarCarpeta, borrarCarpeta, listarPaginas, guardarDocumento } from '../db.js';
+import { esPDF, nombreDelPDF } from '../importar.js';
 import { terminos, buscarEn, fragmento } from '../buscar.js';
 import { ajustes, cambiarAjuste } from '../ajustes.js';
 import { ir } from '../rutas.js';
@@ -230,7 +231,12 @@ async function importar() {
   const archivos = await elegirArchivos('entrada-fotos');
   if (!archivos.length) return;
   const doc = await nuevoDocumento();
-  importarArchivos(doc.id, archivos);
+  // Un PDF solo: el documento se llama como el archivo
+  if (archivos.length === 1 && esPDF(archivos[0]) && nombreDelPDF(archivos[0])) {
+    doc.nombre = nombreDelPDF(archivos[0]);
+    await guardarDocumento(doc);
+  }
+  importarArchivos(doc.id, archivos, { pedirClave: pedirClaveDePDF });
   ir('doc/' + encodeURIComponent(doc.id));
 }
 

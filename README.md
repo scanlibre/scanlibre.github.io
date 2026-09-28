@@ -29,6 +29,8 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Buscar en todos los documentos:** en los nombres y en el texto de cada página, sin importar tildes ni mayúsculas. Muestra la página y el pedazo donde está la palabra; las páginas que faltan se leen con un toque.
 - **Carpetas por clase:** lo que escaneas dentro de una carpeta se guarda ahí y se nombra solo («Cálculo – 27 sept»). Los documentos se pueden mover de carpeta; borrar una carpeta no borra sus documentos.
 - **Documentos de varias páginas:** reordenar **arrastrando** las miniaturas (con el dedo: mantener presionada y mover), girar, recortar de nuevo y borrar páginas, todo gratis.
+- **Importar un PDF** (desde "Importar" o "Agregar"): cada página queda como una página más, que se puede marcar, firmar, filtrar o juntar con páginas escaneadas. Si el PDF trae texto, se guarda con cada página en su lugar: se puede buscar, copiar y escuchar sin leerlo con el OCR. Si tiene contraseña, la pide.
+- **Unir y dividir documentos:** unir otro documento al final de este, dividir desde una página (de ahí en adelante, un documento nuevo) o pasar las páginas elegidas a otro documento.
 - **Elegir varias páginas** (mantener presionada una sin moverla): girarlas, cambiarles el filtro, pasarlas a un documento nuevo o a otro que ya existe, hacer el PDF solo de esas o eliminarlas de una vez.
 - **PDF** en tamaño carta, A4 o con la forma de la foto, y en tres calidades. La calidad *Liviana* sirve para subir a plataformas con límite de tamaño. Las páginas en B/N van a 1 bit por píxel: nítidas y livianas (unos 50 KB por página).
 - **PDF con contraseña, gratis:** cifrado AES-256 estándar (el que abren Adobe, Chrome y los visores de Android e iPhone). La contraseña no se guarda en ningún lado.
@@ -38,7 +40,7 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 
 ## Cómo funciona por dentro
 
-La detección, los filtros, el PDF y el respaldo están escritos para esta app, sin librerías (unos 160 KB de código). Para leer el texto se usa [Tesseract.js](https://github.com/naptha/tesseract.js), incluido en `vendor/tesseract/` (licencia Apache 2.0): no depende de ninguna CDN y funciona sin conexión.
+La detección, los filtros, el PDF y el respaldo están escritos para esta app, sin librerías (unos 380 KB de código). Para leer el texto se usa [Tesseract.js](https://github.com/naptha/tesseract.js), incluido en `vendor/tesseract/`, y para importar PDF, [pdf.js](https://github.com/mozilla/pdf.js) de Mozilla, en `vendor/pdfjs/` (los dos con licencia Apache 2.0): no dependen de ninguna CDN, se bajan la primera vez que se usan y después funcionan sin conexión.
 
 | Parte | Archivo | Qué hace |
 |---|---|---|

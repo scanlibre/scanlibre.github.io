@@ -1,10 +1,10 @@
 // ScanLibre · vistas/pagina.js
 // Una página: filtros, brillo, girar, recortar de nuevo, marcarla, moverla, guardarla o borrarla.
 
-import { $, el, aviso, confirmar, nombreArchivo, menu } from '../util.js';
-import { obtenerDocumento, guardarDocumento, obtenerPagina, borrarPagina } from '../db.js';
+import { $, el, aviso, confirmar, nombreArchivo, menu, pedirTexto } from '../util.js';
+import { obtenerDocumento, guardarDocumento, obtenerPagina, borrarPagina, moverPaginas } from '../db.js';
 import { ir, volver } from '../rutas.js';
-import { reprocesar, esBorrosa, separarLibro, baseParaLuz, conLuz, lienzoConMarcas } from '../paginas.js';
+import { reprocesar, esBorrosa, separarLibro, baseParaLuz, conLuz, lienzoConMarcas, nuevoDocumento } from '../paginas.js';
 import { nuevaSesion } from './camara.js';
 import { abrirFoto, canvasABlob, soltarCanvas } from '../fotos.js';
 import { FILTROS } from '../imagen/filtros.js';
@@ -43,13 +43,15 @@ function pintar() {
   $('#pagina-siguiente').disabled = n >= total;
   $('#pagina-borrosa').hidden = !esBorrosa(pagina);
   // Solo se muestra si hubo que enderezarla (o si se deshizo): en una hoja plana no dice nada
+  // (las páginas de un PDF o de una cédula ya vienen listas: no se enderezan ni se buscan dedos)
+  const yaLista = pagina.modo === 'pdf' || pagina.modo === 'cedula';
   const sinAplanar = pagina.aplanar === false;
-  $('#pagina-curva').hidden = !pagina.aplanada && !sinAplanar;
+  $('#pagina-curva').hidden = yaLista || (!pagina.aplanada && !sinAplanar);
   $('#pagina-curva-texto').textContent = sinAplanar ? 'Página sin enderezar.' : 'Se enderezaron los renglones curvos.';
   $('#pagina-curva-boton').textContent = sinAplanar ? 'Enderezar' : 'Deshacer';
   // Igual con los dedos tapados
   const conDedos = pagina.dedos === false;
-  $('#pagina-dedos').hidden = !pagina.sinDedos && !conDedos;
+  $('#pagina-dedos').hidden = yaLista || (!pagina.sinDedos && !conDedos);
   $('#pagina-dedos-texto').textContent = conDedos ? 'Dedos sin tapar.' : 'Se taparon los dedos de los bordes.';
   $('#pagina-dedos-boton').textContent = conDedos ? 'Tapar' : 'Deshacer';
   return imagen;
@@ -225,6 +227,19 @@ async function borrar() {
   else ir(ruta('pagina', Math.min(n, quedan)), { reemplazar: true });
 }
 
+/** Desde esta página hasta el final pasa a un documento nuevo */
+async function dividir() {
+  const total = doc.paginas.length;
+  const nombre = await pedirTexto('Nombre del documento nuevo', `${doc.nombre} (${n}–${total})`.replace(`(${total}–${total})`, `(${total})`), { aceptar: 'Dividir' });
+  if (!nombre) return;
+  const nuevo = await nuevoDocumento(doc.carpetaId || null);
+  nuevo.nombre = nombre;
+  await guardarDocumento(nuevo);
+  await moverPaginas(doc.id, nuevo.id, doc.paginas.slice(n - 1));
+  aviso(`Listo: «${doc.nombre}» quedó con ${n - 1 === 1 ? '1 página' : `${n - 1} páginas`} y el resto está en «${nombre}».`, 'exito', 5000);
+  ir('doc/' + encodeURIComponent(nuevo.id), { reemplazar: true });
+}
+
 /** Lo que se usa menos va en "Más" */
 async function masOpciones() {
   if (!pagina) return;
@@ -233,11 +248,13 @@ async function masOpciones() {
     n > 1 && { valor: 'antes', texto: 'Mover una página antes', icono: 'antes' },
     n < total && { valor: 'despues', texto: 'Mover una página después', icono: 'despues' },
     { valor: 'separar', texto: 'Libro abierto: separar en dos páginas', icono: 'libro' },
+    n > 1 && { valor: 'dividir', texto: `Dividir aquí: de la página ${n} en adelante, un documento nuevo`, icono: 'pdf' },
     { valor: 'imagen', texto: 'Guardar como imagen', icono: 'descargar' }
   ].filter(Boolean), `Página ${n}`);
   if (opcion === 'antes') mover(-1);
   else if (opcion === 'despues') mover(1);
   else if (opcion === 'separar') separar();
+  else if (opcion === 'dividir') dividir();
   else if (opcion === 'imagen') guardarImagen();
 }
 

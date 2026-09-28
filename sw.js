@@ -3,10 +3,12 @@
 // cambios se sube VERSION (y el número de js/version.js): el navegador baja la
 // versión nueva y borra la vieja.
 
-const VERSION = 'scanlibre-v21';
+const VERSION = 'scanlibre-v22';
 // El lector de texto (unos 6 MB) no se baja al instalar: se guarda la primera vez
 // que se usa, en su propio caché, que no se borra al publicar versiones de la app
 const LECTOR = 'scanlibre-lector-v1';
+// Lo mismo con el lector de PDF (pdf.js, unos 2 MB): se guarda al importar el primer PDF
+const PDFJS = 'scanlibre-pdfjs-v1';
 const ARCHIVOS = [
   './',
   'index.html',
@@ -26,6 +28,7 @@ const ARCHIVOS = [
   'js/db.js',
   'js/exportar.js',
   'js/fotos.js',
+  'js/importar.js',
   'js/marcas.js',
   'js/motor.js',
   'js/paginas.js',
@@ -65,7 +68,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(claves => Promise.all(claves.filter(k => k !== VERSION && k !== LECTOR).map(k => caches.delete(k))))
+      .then(claves => Promise.all(claves.filter(k => k !== VERSION && k !== LECTOR && k !== PDFJS).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -73,8 +76,10 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const pedido = e.request;
   if (pedido.method !== 'GET' || new URL(pedido.url).origin !== location.origin) return;
-  if (new URL(pedido.url).pathname.includes('/vendor/tesseract/')) {
-    e.respondWith(caches.open(LECTOR).then(async c => {
+  const camino = new URL(pedido.url).pathname;
+  const aparte = camino.includes('/vendor/tesseract/') ? LECTOR : camino.includes('/vendor/pdfjs/') ? PDFJS : null;
+  if (aparte) {
+    e.respondWith(caches.open(aparte).then(async c => {
       const guardada = await c.match(pedido);
       if (guardada) return guardada;
       const r = await fetch(pedido);

@@ -102,7 +102,7 @@
       <ul id="inicio-lista" class="lista-docs" aria-label="Tus documentos"></ul>
     </div>
     <footer class="acciones">
-      <button class="boton boton-secundario" id="inicio-importar" aria-label="Importar fotos de la galería"><svg class="icono"><use href="#i-galeria"/></svg>Importar</button>
+      <button class="boton boton-secundario" id="inicio-importar" aria-label="Importar fotos o un PDF"><svg class="icono"><use href="#i-galeria"/></svg>Importar</button>
       <button class="boton boton-primario boton-grande" id="inicio-escanear"><svg class="icono"><use href="#i-camara"/></svg>Escanear</button>
     </footer>
   </section>
@@ -281,7 +281,7 @@
 </main>
 
 <div id="avisos" class="avisos"></div>
-<input type="file" id="entrada-fotos" accept="image/*" multiple hidden>
+<input type="file" id="entrada-fotos" accept="image/*,application/pdf,.pdf" multiple hidden>
 <input type="file" id="entrada-camara" accept="image/*" capture="environment" hidden>
 <input type="file" id="entrada-respaldo" accept=".zip,application/zip" hidden>
 <noscript><p class="sin-js">ScanLibre necesita JavaScript para funcionar.</p></noscript>

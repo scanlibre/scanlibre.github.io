@@ -3,7 +3,7 @@
 // varias (girar, filtro, pasarlas a otro documento, PDF o eliminar),
 // renombrar y crear el PDF.
 
-import { $, el, icono, aviso, confirmar, pedirTexto, menu, hoja, paginasTexto, fechaCorta, tamanoLegible, nombreArchivo, nuevoId } from '../util.js';
+import { $, el, icono, aviso, confirmar, pedirTexto, menu, hoja, paginasTexto, fechaCorta, tamanoLegible, nombreArchivo, nuevoId, pedirClaveDePDF } from '../util.js';
 import { obtenerDocumento, guardarDocumento, paginasDe, borrarDocumento, listarCarpetas, guardarCarpeta, listarDocumentos, borrarPaginas, moverPaginas } from '../db.js';
 import { ir, volver } from '../rutas.js';
 import { eventosPaginas, pendientesEnCola, importarArchivos, textoDePagina, esBorrosa, reprocesar, nuevoDocumento } from '../paginas.js';
@@ -361,14 +361,14 @@ async function guardarOrden(orden, id) {
 async function agregar() {
   const opcion = await menu([
     { valor: 'camara', texto: 'Con la cámara', icono: 'camara' },
-    { valor: 'galeria', texto: 'Fotos de la galería', icono: 'galeria' }
+    { valor: 'galeria', texto: 'Fotos o un PDF', icono: 'galeria' }
   ], 'Agregar páginas');
   if (opcion === 'camara') {
     nuevaSesion(docId, 'doc');
     ir('camara?doc=' + encodeURIComponent(docId));
   } else if (opcion === 'galeria') {
     const archivos = await elegirArchivos('entrada-fotos');
-    if (archivos.length) importarArchivos(docId, archivos);
+    if (archivos.length) importarArchivos(docId, archivos, { pedirClave: pedirClaveDePDF });
   }
 }
 
@@ -394,6 +394,25 @@ async function moverACarpeta() {
   pintar();
 }
 
+/** Las páginas de otro documento pasan al final de este, y el otro se borra */
+async function unirCon() {
+  const [doc, todos] = await Promise.all([obtenerDocumento(docId), listarDocumentos()]);
+  const otros = todos.filter(d => d.id !== docId && d.paginas.length);
+  if (!otros.length) return aviso('No hay otro documento con páginas para unir.');
+  const opcion = await menu(otros.slice(0, 12).map(d => ({ valor: d.id, texto: `${d.nombre} (${paginasTexto(d.paginas.length)})`, icono: 'pdf' })), 'Unir con…');
+  const otro = otros.find(d => d.id === opcion);
+  if (!otro) return;
+  const si = await confirmar(`¿Unir «${otro.nombre}» a este documento?`, {
+    detalle: `Sus ${paginasTexto(otro.paginas.length)} pasan al final de «${doc.nombre}» y «${otro.nombre}» deja de estar en la lista.`,
+    aceptar: 'Unir'
+  });
+  if (!si) return;
+  await moverPaginas(otro.id, docId, otro.paginas);
+  await borrarDocumento(otro.id);
+  aviso(`Listo: se unieron. Ahora son ${paginasTexto(doc.paginas.length + otro.paginas.length)}.`, 'exito', 4500);
+  pintar();
+}
+
 async function renombrar() {
   const doc = await obtenerDocumento(docId);
   const nombre = await pedirTexto('Nombre del documento', doc.nombre);
@@ -408,12 +427,14 @@ async function masOpciones() {
   const opcion = await menu([
     { valor: 'texto', texto: 'Texto de todo el documento (copiar, escuchar, Word)', icono: 'texto' },
     { valor: 'elegir', texto: 'Elegir páginas (girar, pasar a otro documento…)', icono: 'listo' },
+    { valor: 'unir', texto: 'Unir con otro documento', icono: 'mas' },
     { valor: 'renombrar', texto: 'Cambiar el nombre', icono: 'editar' },
     { valor: 'mover', texto: 'Mover a una carpeta', icono: 'carpeta' },
     { valor: 'borrar', texto: 'Eliminar el documento', icono: 'basura', peligro: true }
   ]);
   if (opcion === 'mover') return moverACarpeta();
   if (opcion === 'elegir') return entrarSeleccion();
+  if (opcion === 'unir') return unirCon();
   if (opcion === 'texto') {
     const doc = await obtenerDocumento(docId);
     const paginas = await paginasDe(doc);

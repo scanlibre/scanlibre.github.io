@@ -111,14 +111,15 @@ export function confirmar(titulo, { detalle = '', aceptar = 'Aceptar', peligro =
   ]).then(v => v === true);
 }
 
-export function pedirTexto(titulo, valor = '', { aceptar = 'Guardar', ejemplo } = {}) {
+export function pedirTexto(titulo, valor = '', { aceptar = 'Guardar', ejemplo, tipo = 'text', detalle } = {}) {
   return hoja(cerrar => {
-    const entrada = el('input', { class: 'campo', type: 'text', value: valor, maxlength: 120, 'aria-label': titulo, placeholder: ejemplo, enterkeyhint: 'done' });
+    const entrada = el('input', { class: 'campo', type: tipo, value: valor, maxlength: 120, 'aria-label': titulo, placeholder: ejemplo, enterkeyhint: 'done', autocomplete: tipo === 'password' ? 'off' : null });
     const listo = () => { const v = entrada.value.trim(); if (v) cerrar(v); };
     entrada.addEventListener('keydown', e => { if (e.key === 'Enter') listo(); });
     setTimeout(() => { entrada.focus(); entrada.select(); }, 50);
     return [
       el('h2', { class: 'hoja-titulo', text: titulo }),
+      detalle && el('p', { class: 'hoja-detalle', text: detalle }),
       entrada,
       el('div', { class: 'hoja-botones' },
         el('button', { class: 'boton boton-secundario', onclick: () => cerrar(undefined) }, 'Cancelar'),
@@ -126,6 +127,12 @@ export function pedirTexto(titulo, valor = '', { aceptar = 'Guardar', ejemplo } 
     ];
   });
 }
+
+/** Pide la contraseña de un PDF que se importa (no se guarda en ningún lado) */
+export const pedirClaveDePDF = incorrecta => pedirTexto(incorrecta ? 'Contraseña incorrecta' : 'Este PDF tiene contraseña', '', {
+  aceptar: 'Abrir', tipo: 'password', ejemplo: 'Contraseña',
+  detalle: incorrecta ? 'Prueba otra vez.' : 'Escríbela para importar sus páginas.'
+});
 
 /** Menú de opciones [{ valor, texto, icono, peligro }] en una hoja desde abajo */
 export function menu(opciones, titulo) {
