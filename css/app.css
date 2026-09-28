@@ -379,7 +379,7 @@ mark { background: var(--marca-suave); color: var(--texto); border-radius: 3px; 
   display: flex; align-items: center; gap: 4px; padding: 4px 8px 12px;
 }
 .pagina-hoja { position: relative; flex: 1; height: 100%; min-width: 0; display: grid; place-items: center; }
-.pagina-hoja img {
+.pagina-hoja img, .pagina-hoja canvas {
   max-width: 100%; max-height: 100%; object-fit: contain;
   background: #fff; border-radius: 4px; box-shadow: var(--sombra);
 }
@@ -412,7 +412,7 @@ mark { background: var(--marca-suave); color: var(--texto); border-radius: 3px; 
 .filtro[aria-pressed="true"] { background: var(--marca); color: var(--marca-texto); border-color: transparent; }
 
 .herramientas {
-  display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+  display: grid; grid-auto-columns: 1fr; grid-auto-flow: column; gap: 2px;
   padding: 6px 8px calc(8px + var(--seguro-abajo));
   border-top: 1px solid var(--borde); background: var(--fondo);
 }
@@ -424,6 +424,20 @@ mark { background: var(--marca-suave); color: var(--texto); border-radius: 3px; 
 .herramienta .icono { color: var(--texto); }
 .herramienta:hover:not(:disabled) { background: var(--superficie-2); }
 .herramienta:disabled { opacity: 0.35; cursor: default; }
+
+/* Brillo y contraste: en lugar de los filtros y las herramientas mientras se ajusta */
+.luz {
+  display: grid; gap: 4px; width: 100%; max-width: 560px; margin: 0 auto;
+  padding: 6px 16px calc(10px + var(--seguro-abajo)); border-top: 1px solid var(--borde);
+}
+.luz-fila { display: grid; grid-template-columns: 5.6em 1fr 2.6em; align-items: center; gap: 10px; min-height: 44px; }
+.luz-fila label { font-weight: 650; font-size: 0.92rem; }
+.luz-fila input { width: 100%; height: 32px; accent-color: var(--marca); }
+.luz-fila output { text-align: right; font-variant-numeric: tabular-nums; color: var(--texto-2); font-size: 0.9rem; }
+.luz-nota { margin: 0; font-size: 0.85rem; color: var(--texto-2); }
+.luz-botones { display: flex; gap: 8px; margin-top: 4px; }
+.luz-botones .boton { flex: 1; min-height: 44px; padding: 0 10px; }
+.luz-botones .boton-fantasma { flex: 0 1 auto; color: var(--marca-fuerte); }
 
 /* ── Hojas (diálogos desde abajo) ───────────────────────────────── */
 .hoja {

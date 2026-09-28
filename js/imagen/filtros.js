@@ -11,12 +11,44 @@ export const FILTROS = {
   bn: 'B/N'
 };
 
-export function aplicarFiltro(img, filtro) {
-  if (filtro === 'mejorada') return realzar(img, CURVA);
-  if (filtro === 'dibujo') return realzar(img, CURVA_DIBUJO);
-  if (filtro === 'gris') return gris(img);
-  if (filtro === 'bn') return blancoYNegro(img);
-  return img;
+/**
+ * @param luz.brillo, luz.contraste  los que elige uno a mano (de -50 a 50; 0 = sin cambio).
+ *   En B/N no hay grises: el brillo mueve el corte (más claro, letras más finas)
+ *   y el contraste no se usa.
+ */
+export function aplicarFiltro(img, filtro, { brillo = 0, contraste = 0 } = {}) {
+  if (filtro === 'bn') return blancoYNegro(img, brillo);
+  let r = img;
+  if (filtro === 'mejorada') r = realzar(img, CURVA);
+  else if (filtro === 'dibujo') r = realzar(img, CURVA_DIBUJO);
+  else if (filtro === 'gris') r = gris(img);
+  return ajustarLuz(r, brillo, contraste);
+}
+
+/**
+ * Curva de brillo y contraste (tabla de 256).
+ *  · Brillo: aclara u oscurece los tonos medios sin tocar el blanco del papel
+ *    ni el negro (una curva gamma): con menos brillo el lápiz suave se oscurece
+ *    y el papel sigue blanco.
+ *  · Contraste: separa los claros de los oscuros alrededor del gris medio: con
+ *    más, la tinta queda más negra y el gris claro pasa a blanco.
+ */
+export function curvaDeLuz(brillo = 0, contraste = 0) {
+  const gamma = Math.pow(2, -brillo / 50), c = Math.pow(2, contraste / 50);
+  const t = new Uint8ClampedArray(256);
+  for (let v = 0; v < 256; v++) t[v] = Math.round(255 * ((Math.pow(v / 255, gamma) - 0.5) * c + 0.5));
+  return t;
+}
+
+export function ajustarLuz(img, brillo = 0, contraste = 0) {
+  if (!brillo && !contraste) return img;
+  const t = curvaDeLuz(brillo, contraste);
+  const { data, width, height } = img;
+  const out = new Uint8ClampedArray(data.length);
+  for (let i = 0; i < data.length; i += 4) {
+    out[i] = t[data[i]]; out[i + 1] = t[data[i + 1]]; out[i + 2] = t[data[i + 2]]; out[i + 3] = data[i + 3];
+  }
+  return { data: out, width, height };
 }
 
 function luminancia(img) {
@@ -245,9 +277,11 @@ function gris(img) {
  */
 const K_SAUVOLA = 0.2, R_SAUVOLA = 128;
 
-function blancoYNegro(img) {
+function blancoYNegro(img, brillo = 0) {
   const { width: w, height: h } = img;
   const N = luminanciaPareja(img);
+  // El brillo, antes del corte: con más brillo lo gris claro pasa a papel
+  if (brillo) { const t = curvaDeLuz(brillo, 0); for (let i = 0; i < N.length; i++) N[i] = t[N[i]]; }
   // Promedio y variación en una versión 2 veces más chica (rápido y suficiente)
   const r = 2, sw = Math.ceil(w / r), sh = Math.ceil(h / r);
   const m1 = new Float32Array(sw * sh), m2 = new Float32Array(sw * sh);

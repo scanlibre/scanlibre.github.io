@@ -35,6 +35,7 @@ async function pedir(mensaje, transferir) {
     if (mensaje.tipo === 'detectar') return directo.detectarHoja(mensaje.imagen);
     if (mensaje.tipo === 'nitidez') return mensaje.opciones?.esquinas ? directo.nitidezDeHoja(mensaje.imagen, mensaje.opciones.esquinas) : directo.medirNitidez(mensaje.imagen);
     if (mensaje.tipo === 'lectura') return directo.prepararParaLeer(mensaje.imagen);
+    if (mensaje.tipo === 'luz') return directo.aplicarFiltro(mensaje.imagen, mensaje.opciones.filtro, mensaje.opciones);
     if (mensaje.tipo === 'libro') return directo.dividirLibro(mensaje.imagen, mensaje.opciones.esquinas);
     return directo.procesarPagina(mensaje.imagen, mensaje.opciones);
   }
@@ -78,6 +79,18 @@ export function nitidez(imagen, esquinas) {
 export async function paraLeer(imagen) {
   const r = await pedir(
     { tipo: 'lectura', imagen: { data: imagen.data, width: imagen.width, height: imagen.height } },
+    [imagen.data.buffer]
+  );
+  return new ImageData(new Uint8ClampedArray(r.data.buffer, r.data.byteOffset, r.data.length), r.width, r.height);
+}
+
+/**
+ * El filtro con el brillo y el contraste, para ver cómo queda mientras se
+ * mueven las barras. `imagen` (ImageData) se entrega al worker.
+ */
+export async function luz(imagen, { filtro, brillo = 0, contraste = 0 }) {
+  const r = await pedir(
+    { tipo: 'luz', imagen: { data: imagen.data, width: imagen.width, height: imagen.height }, opciones: { filtro, brillo, contraste } },
     [imagen.data.buffer]
   );
   return new ImageData(new Uint8ClampedArray(r.data.buffer, r.data.byteOffset, r.data.length), r.width, r.height);

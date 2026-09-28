@@ -1,10 +1,10 @@
 // ScanLibre · vistas/pagina.js
-// Una página: filtros, girar, recortar de nuevo, moverla, guardarla o borrarla.
+// Una página: filtros, brillo, girar, recortar de nuevo, moverla, guardarla o borrarla.
 
-import { $, el, aviso, confirmar, nombreArchivo } from '../util.js';
+import { $, el, aviso, confirmar, nombreArchivo, menu } from '../util.js';
 import { obtenerDocumento, guardarDocumento, obtenerPagina, borrarPagina } from '../db.js';
 import { ir, volver } from '../rutas.js';
-import { reprocesar, esBorrosa, separarLibro } from '../paginas.js';
+import { reprocesar, esBorrosa, separarLibro, baseParaLuz, conLuz } from '../paginas.js';
 import { nuevaSesion } from './camara.js';
 import { abrirFoto } from '../fotos.js';
 import { FILTROS } from '../imagen/filtros.js';
@@ -14,6 +14,7 @@ import { mostrarTexto } from './texto.js';
 import { puedeCompartir, compartir, descargar } from '../exportar.js';
 
 let doc = null, pagina = null, n = 1, url = null, trabajando = false;
+let luz = null; // mientras se ajusta el brillo: { base, brillo, contraste, ocupado, otra }
 const ruta = (...partes) => ['doc', encodeURIComponent(doc.id), ...partes].join('/');
 
 export async function mostrar(params) {
@@ -22,10 +23,12 @@ export async function mostrar(params) {
   if (!doc.paginas.length) return ir(ruta(), { reemplazar: true });
   n = Math.min(params.n, doc.paginas.length);
   pagina = await obtenerPagina(doc.paginas[n - 1]);
+  cerrarLuz();
   pintar();
 }
 
 export function ocultar() {
+  cerrarLuz();
   if (url) URL.revokeObjectURL(url);
   url = null;
 }
@@ -52,8 +55,6 @@ function pintar() {
   $('#pagina-dedos').hidden = !pagina.sinDedos && !conDedos;
   $('#pagina-dedos-texto').textContent = conDedos ? 'Dedos sin tapar.' : 'Se taparon los dedos de los bordes.';
   $('#pagina-dedos-boton').textContent = conDedos ? 'Tapar' : 'Deshacer';
-  $('#pagina-mover-antes').disabled = n <= 1;
-  $('#pagina-mover-despues').disabled = n >= total;
 }
 
 /** Corre un cambio con el aviso de "Procesando…" encima de la página */
@@ -73,6 +74,87 @@ async function conEspera(trabajo) {
 }
 
 const cambiar = cambios => conEspera(async () => { pagina = await reprocesar(pagina, cambios); pintar(); });
+
+// ── Brillo y contraste ──────────────────────────────────────────────
+// Mientras se mueven las barras se ve cómo queda, con la página más chica;
+// con "Listo" se arma la página de verdad.
+async function abrirLuz() {
+  if (!pagina || luz || trabajando) return;
+  const esta = pagina;
+  await conEspera(async () => {
+    const base = await baseParaLuz(esta);
+    if (pagina !== esta) return;
+    luz = { base, brillo: esta.brillo || 0, contraste: esta.contraste || 0, ocupado: false, otra: false };
+    $('#pagina-brillo').value = luz.brillo;
+    $('#pagina-contraste').value = luz.contraste;
+    const bn = esta.filtro === 'bn';
+    $('#pagina-contraste-fila').hidden = bn;
+    $('#pagina-luz-bn').hidden = !bn;
+    $('#pagina-filtros').hidden = $('#pagina-herramientas').hidden = true;
+    $('#pagina-anterior').disabled = $('#pagina-siguiente').disabled = true;
+    $('#pagina-luz').hidden = false;
+    await verLuz();
+  });
+}
+
+function numeros() {
+  const txt = v => (v > 0 ? '+' : '') + v;
+  $('#pagina-brillo-valor').textContent = txt(luz.brillo);
+  $('#pagina-contraste-valor').textContent = txt(luz.contraste);
+}
+
+/** Pinta la vista previa; si llegan cambios mientras se arma, al terminar se arma la última */
+async function verLuz() {
+  if (!luz) return;
+  numeros();
+  if (luz.ocupado) { luz.otra = true; return; }
+  luz.ocupado = true;
+  const actual = luz;
+  try {
+    const img = await conLuz(actual.base, pagina.filtro, actual.brillo, pagina.filtro === 'bn' ? 0 : actual.contraste);
+    if (luz !== actual) return;
+    const c = $('#pagina-previa');
+    if (c.width !== img.width || c.height !== img.height) { c.width = img.width; c.height = img.height; }
+    c.getContext('2d').putImageData(img, 0, 0);
+    c.hidden = false;
+    $('#pagina-imagen').hidden = true;
+  } catch (e) {
+    console.error(e);
+  } finally {
+    actual.ocupado = false;
+    if (actual.otra && luz === actual) { actual.otra = false; verLuz(); }
+  }
+}
+
+/** Cierra las barras. Con `dejarVista`, la vista previa queda hasta que esté la página nueva */
+function cerrarLuz({ dejarVista = false } = {}) {
+  if (!luz && $('#pagina-luz').hidden) return;
+  luz = null;
+  $('#pagina-luz').hidden = true;
+  $('#pagina-filtros').hidden = $('#pagina-herramientas').hidden = false;
+  if (!dejarVista) quitarVista();
+  if (doc && pagina) {
+    $('#pagina-anterior').disabled = n <= 1;
+    $('#pagina-siguiente').disabled = n >= doc.paginas.length;
+  }
+}
+
+function quitarVista() {
+  const c = $('#pagina-previa');
+  c.hidden = true;
+  c.width = c.height = 0;
+  $('#pagina-imagen').hidden = false;
+}
+
+async function listoLuz() {
+  if (!luz) return;
+  const brillo = luz.brillo, contraste = pagina.filtro === 'bn' ? (pagina.contraste || 0) : luz.contraste;
+  if (brillo === (pagina.brillo || 0) && contraste === (pagina.contraste || 0)) return cerrarLuz();
+  cerrarLuz({ dejarVista: true });
+  await cambiar({ brillo, contraste });
+  await $('#pagina-imagen').decode?.().catch(() => {});
+  quitarVista();
+}
 
 async function mover(paso) {
   const destino = n - 1 + paso;
@@ -119,6 +201,33 @@ async function borrar() {
   else ir(ruta('pagina', Math.min(n, quedan)), { reemplazar: true });
 }
 
+/** Lo que se usa menos va en "Más" */
+async function masOpciones() {
+  if (!pagina) return;
+  const total = doc.paginas.length;
+  const opcion = await menu([
+    n > 1 && { valor: 'antes', texto: 'Mover una página antes', icono: 'antes' },
+    n < total && { valor: 'despues', texto: 'Mover una página después', icono: 'despues' },
+    { valor: 'separar', texto: 'Libro abierto: separar en dos páginas', icono: 'libro' },
+    { valor: 'imagen', texto: 'Guardar como imagen', icono: 'descargar' }
+  ].filter(Boolean), `Página ${n}`);
+  if (opcion === 'antes') mover(-1);
+  else if (opcion === 'despues') mover(1);
+  else if (opcion === 'separar') separar();
+  else if (opcion === 'imagen') guardarImagen();
+}
+
+// Libro abierto en una sola página: se separa en dos (la derecha queda después)
+const separar = () => conEspera(async () => {
+  if (!pagina) return;
+  const r = await separarLibro(pagina);
+  if (!r) return aviso('No encontré el lomo del libro. Si es un libro abierto, toca Recortar y deja adentro las dos páginas.', 'error', 6000);
+  doc = await obtenerDocumento(doc.id);
+  pagina = r[0];
+  pintar();
+  aviso(`Listo: quedaron las páginas ${n} y ${n + 1}.`, 'exito');
+});
+
 export function iniciar() {
   $('#pagina-filtros').replaceChildren(...Object.entries(FILTROS).map(([valor, texto]) =>
     el('button', { class: 'filtro', 'data-filtro': valor, 'aria-pressed': 'false', onclick: () => {
@@ -136,21 +245,21 @@ export function iniciar() {
   $('#pagina-girar-izq').addEventListener('click', () => cambiar({ rotacion: (pagina.rotacion + 3) % 4 }));
   $('#pagina-girar-der').addEventListener('click', () => cambiar({ rotacion: (pagina.rotacion + 1) % 4 }));
   $('#pagina-recortar').addEventListener('click', recortar);
-  $('#pagina-mover-antes').addEventListener('click', () => mover(-1));
-  $('#pagina-mover-despues').addEventListener('click', () => mover(1));
   $('#pagina-curva-boton').addEventListener('click', () => { if (pagina) cambiar({ aplanar: pagina.aplanar === false }); });
   $('#pagina-dedos-boton').addEventListener('click', () => { if (pagina) cambiar({ dedos: pagina.dedos === false }); });
-  // Libro abierto en una sola página: se separa en dos (la derecha queda después)
-  $('#pagina-separar').addEventListener('click', () => conEspera(async () => {
-    if (!pagina) return;
-    const r = await separarLibro(pagina);
-    if (!r) return aviso('No encontré el lomo del libro. Si es un libro abierto, toca Recortar y deja adentro las dos páginas.', 'error', 6000);
-    doc = await obtenerDocumento(doc.id);
-    pagina = r[0];
-    pintar();
-    aviso(`Listo: quedaron las páginas ${n} y ${n + 1}.`, 'exito');
-  }));
+  $('#pagina-luz-abrir').addEventListener('click', abrirLuz);
+  for (const [id, clave] of [['#pagina-brillo', 'brillo'], ['#pagina-contraste', 'contraste']]) {
+    $(id).addEventListener('input', e => { if (luz) { luz[clave] = Number(e.target.value); verLuz(); } });
+  }
+  $('#pagina-luz-restablecer').addEventListener('click', () => {
+    if (!luz) return;
+    luz.brillo = luz.contraste = 0;
+    $('#pagina-brillo').value = $('#pagina-contraste').value = 0;
+    verLuz();
+  });
+  $('#pagina-luz-cancelar').addEventListener('click', () => cerrarLuz());
+  $('#pagina-luz-listo').addEventListener('click', listoLuz);
+  $('#pagina-mas').addEventListener('click', masOpciones);
   $('#pagina-texto').addEventListener('click', () => { if (pagina) mostrarTexto([pagina], { titulo: `Texto de la página ${n}`, nombre: `${doc.nombre} – página ${n}` }); });
-  $('#pagina-guardar').addEventListener('click', guardarImagen);
   $('#pagina-borrar').addEventListener('click', borrar);
 }

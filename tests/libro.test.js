@@ -39,7 +39,8 @@ describe('Modo libro en la app', () => {
     const page = await env.pagina();
     await importarFoto(page, guardarPNG(libroAbierto(), 'libro.png'));
     await page.click('#doc-paginas .miniatura');
-    await page.click('#pagina-separar');
+    await page.click('#pagina-mas');
+    await page.click('.menu-opcion:has-text("separar en dos páginas")');
     await page.waitForSelector('.aviso-exito:has-text("quedaron las páginas 1 y 2")', { timeout: 30000 });
     assert.equal(await page.textContent('#pagina-titulo'), 'Página 1 de 2');
     const { documentos, paginas } = await leerBase(page);
@@ -56,7 +57,8 @@ describe('Modo libro en la app', () => {
     const page = await env.pagina();
     await importarFoto(page, guardarPNG(paginaDeTexto(800, 1100), 'hoja.png'));
     await page.click('#doc-paginas .miniatura');
-    await page.click('#pagina-separar');
+    await page.click('#pagina-mas');
+    await page.click('.menu-opcion:has-text("separar en dos páginas")');
     await page.waitForSelector('.aviso-error:has-text("No encontré el lomo")');
     assert.equal((await leerBase(page)).paginas.length, 1);
   });

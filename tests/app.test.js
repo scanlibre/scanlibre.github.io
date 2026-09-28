@@ -137,7 +137,8 @@ describe('La app', () => {
     await importarFoto(page, foto1.ruta, foto2.ruta, foto3.ruta);
     const antes = (await leerBase(page)).documentos[0].paginas;
     await page.click('#doc-paginas li:nth-child(1) .miniatura');
-    await page.click('#pagina-mover-despues');
+    await page.click('#pagina-mas');
+    await page.click('.menu-opcion:has-text("Mover una página después")');
     await page.waitForFunction(() => document.querySelector('#pagina-titulo').textContent === 'Página 2 de 3');
     const movido = (await leerBase(page)).documentos[0].paginas;
     assert.deepEqual(movido, [antes[1], antes[0], antes[2]]);

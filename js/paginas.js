@@ -3,7 +3,7 @@
 // Las fotos en ráfaga o importadas pasan por una cola, una por una, para no
 // llenar la memoria del teléfono.
 
-import { detectar, procesar, nitidez as medir, dividirLibro } from './motor.js';
+import { detectar, procesar, nitidez as medir, dividirLibro, luz } from './motor.js';
 import { UMBRAL_BORROSA } from './imagen/nitidez.js';
 import { abrirFoto, aCanvas, aImageData, canvasABlob, imageDataABlob, normalizarFoto, soltarCanvas } from './fotos.js';
 import { agregarPagina, guardarDocumento, guardarPagina, obtenerDocumento, obtenerPagina, listarCarpetas, listarDocumentos, insertarPaginaDespues } from './db.js';
@@ -31,8 +31,8 @@ export async function buscarHoja(fuente) {
 }
 
 /** Endereza y filtra la foto; devuelve los Blob de la página y de su miniatura */
-async function renderizar(fuente, { esquinas, filtro, rotacion, aplanar = true, dedos = true }) {
-  const { imagen: res, nitidez, aplanada, sinDedos } = await procesar(aImageData(fuente), { esquinas, filtro, rotacion, aplanar, dedos, maxLado: 3000 });
+async function renderizar(fuente, { esquinas, filtro, rotacion, aplanar = true, dedos = true, brillo = 0, contraste = 0 }) {
+  const { imagen: res, nitidez, aplanada, sinDedos } = await procesar(aImageData(fuente), { esquinas, filtro, rotacion, aplanar, dedos, brillo, contraste, maxLado: 3000 });
   // El blanco y negro se guarda en PNG: sin pérdida y liviano
   const procesada = await imageDataABlob(res, filtro === 'bn' ? 'image/png' : 'image/jpeg', 0.9);
   const lienzo = document.createElement('canvas');
@@ -85,7 +85,7 @@ export async function separarLibro(pagina) {
   try {
     const mitades = await esquinasDeLibro(bitmap, pagina.esquinas);
     if (!mitades) return null;
-    const datos = { filtro: pagina.filtro, rotacion: 0, aplanar: pagina.aplanar !== false, dedos: pagina.dedos !== false };
+    const datos = { filtro: pagina.filtro, rotacion: 0, aplanar: pagina.aplanar !== false, dedos: pagina.dedos !== false, brillo: pagina.brillo || 0, contraste: pagina.contraste || 0 };
     const izquierda = { ...pagina, ...datos, esquinas: mitades[0], ...(await renderizar(bitmap, { ...datos, esquinas: mitades[0] })), ocr: null };
     const derecha = { ...pagina, ...datos, id: nuevoId(), creada: Date.now(), esquinas: mitades[1], ...(await renderizar(bitmap, { ...datos, esquinas: mitades[1] })), ocr: null };
     await guardarPagina(izquierda);
@@ -96,9 +96,9 @@ export async function separarLibro(pagina) {
   }
 }
 
-/** Vuelve a armar la página con otras esquinas, filtro, giro o aplanado, y la guarda */
+/** Vuelve a armar la página con otras esquinas, filtro, giro, aplanado o brillo, y la guarda */
 export async function reprocesar(pagina, cambios) {
-  const datos = { esquinas: pagina.esquinas, filtro: pagina.filtro, rotacion: pagina.rotacion, aplanar: pagina.aplanar !== false, dedos: pagina.dedos !== false, ...cambios };
+  const datos = { esquinas: pagina.esquinas, filtro: pagina.filtro, rotacion: pagina.rotacion, aplanar: pagina.aplanar !== false, dedos: pagina.dedos !== false, brillo: pagina.brillo || 0, contraste: pagina.contraste || 0, ...cambios };
   const bitmap = await abrirFoto(pagina.original);
   const r = await renderizar(bitmap, datos);
   bitmap.close?.();
@@ -110,10 +110,32 @@ export async function reprocesar(pagina, cambios) {
   return nueva;
 }
 
+/**
+ * Para ver el brillo y el contraste mientras se mueven las barras: la página
+ * enderezada y sin filtro, más chica (se arma una vez al abrir las barras).
+ */
+export async function baseParaLuz(pagina, maxLado = 1400) {
+  const bitmap = await abrirFoto(pagina.original);
+  try {
+    const { imagen } = await procesar(aImageData(bitmap), {
+      esquinas: pagina.esquinas, filtro: 'original', rotacion: pagina.rotacion, aplanar: pagina.aplanar !== false, dedos: pagina.dedos !== false, maxLado
+    });
+    return imagen;
+  } finally {
+    bitmap.close?.();
+  }
+}
+
+/** Cómo queda la base con el filtro, el brillo y el contraste (la base no se toca) */
+export const conLuz = (base, filtro, brillo, contraste) =>
+  luz(new ImageData(new Uint8ClampedArray(base.data), base.width, base.height), { filtro, brillo, contraste });
+
 /** Qué versión de la página es: si cambia (filtro, recorte, giro), el texto leído deja de servir */
 // LECTOR sube cuando cambia cómo se lee (así los textos viejos se vuelven a leer)
 const LECTOR = 3;
-const versionDe = p => `l${LECTOR}|${p.filtro}|${p.rotacion}|${p.aplanar !== false}|${p.dedos !== false}|${p.procAncho}x${p.procAlto}|${JSON.stringify(p.esquinas)}`;
+// (el brillo va solo si se cambió: así el texto ya leído de las páginas de antes sigue valiendo)
+const versionDe = p => `l${LECTOR}|${p.filtro}|${p.rotacion}|${p.aplanar !== false}|${p.dedos !== false}|${p.procAncho}x${p.procAlto}|${JSON.stringify(p.esquinas)}` +
+  (p.brillo || p.contraste ? `|luz${p.brillo || 0},${p.contraste || 0}` : '');
 
 /** El texto ya leído de la página, si sigue siendo de esta versión de la página (si no, null) */
 export const textoLeido = p => (p.ocr && p.ocr.version === versionDe(p) ? p.ocr.texto : null);

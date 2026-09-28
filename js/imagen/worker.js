@@ -1,7 +1,7 @@
 // ScanLibre · imagen/worker.js
 // Hace las cuentas pesadas fuera de la página para que la app no se trabe.
 
-import { detectarHoja, procesarPagina, nitidezDeHoja, medirNitidez, prepararParaLeer, dividirLibro } from './procesar.js';
+import { detectarHoja, procesarPagina, nitidezDeHoja, medirNitidez, prepararParaLeer, dividirLibro, aplicarFiltro } from './procesar.js';
 
 self.onmessage = e => {
   const { id, tipo, imagen, opciones } = e.data;
@@ -14,6 +14,9 @@ self.onmessage = e => {
       self.postMessage({ id, resultado: r }, [r.data.buffer]);
     } else if (tipo === 'lectura') {
       const r = prepararParaLeer(imagen);
+      self.postMessage({ id, resultado: r }, [r.data.buffer]);
+    } else if (tipo === 'luz') {
+      const r = aplicarFiltro(imagen, opciones.filtro, opciones);
       self.postMessage({ id, resultado: r }, [r.data.buffer]);
     } else if (tipo === 'libro') {
       self.postMessage({ id, resultado: dividirLibro(imagen, opciones.esquinas) });

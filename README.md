@@ -16,6 +16,7 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Quitar dedos:** los dedos que sostienen la hoja en los bordes se tapan con el color del papel (de piel clara a morena, también en sombra). Una hoja amarillenta o un dibujo en medio de la página no se tocan, y en cada página se puede deshacer.
 - **Páginas curvas de libros:** si la hoja no queda plana (cerca del lomo o con una esquina levantada), sigue los renglones de texto y los endereza. En una hoja plana no toca nada, y en cada página se puede deshacer.
 - **Esquinas a mano** con lupa; se ven sobre papel blanco y sobre fondos oscuros.
+- **Brillo y contraste a mano** en cada página, viendo cómo queda mientras se mueven las barras. El brillo aclara u oscurece los tonos medios sin ensuciar el papel blanco (sirve para el lápiz suave); en B/N cambia el grosor de las letras.
 - **Filtros:** Original, Mejorada (papel blanco sin sombras y sin saturar los colores), Dibujo (para lápiz y bocetos: se ven hasta los trazos más suaves), Gris y B/N (umbral local tipo Sauvola: no se come el texto suave ni deja manchas negras con la sombra del lomo de un libro).
 - **Texto (OCR), gratis y sin internet:** copiar o compartir el texto de una página o de todo el documento, en español, inglés o los dos. Y **PDF con texto buscable**: se ve igual, pero se pueden buscar y copiar las palabras. Antes de leer, la página se prepara (papel parejo, más contraste y nitidez): así lee también la letra chica de un libro.
 - **El texto a Word (.docx)** para seguir trabajándolo, con los renglones de cada párrafo juntados y las listas aparte.
@@ -42,7 +43,7 @@ La detección, los filtros, el PDF y el respaldo están escritos para esta app, 
 | Páginas curvas | `js/imagen/aplanar.js` | Busca los renglones en franjas verticales, les ajusta una curva y corre cada columna para dejarlos rectos. |
 | Proporción | `js/imagen/geometria.js` | Homografía y proporción real de la hoja (método de Zhang y He). |
 | Enderezado | `js/imagen/perspectiva.js` | Transformación de perspectiva con interpolación bilineal. |
-| Filtros | `js/imagen/filtros.js` | Estima el brillo del papel por zonas y divide por él (quita sombras sin blanquear los recuadros de color), balance de blancos, y umbral de Sauvola para B/N. |
+| Filtros | `js/imagen/filtros.js` | Estima el brillo del papel por zonas y divide por él (quita sombras sin blanquear los recuadros de color), balance de blancos, y umbral de Sauvola para B/N. Brillo (curva gamma: no mueve el blanco ni el negro) y contraste alrededor del gris medio. |
 | Quietud | `js/imagen/movimiento.js` | Compara cada cuadro del video con el anterior (sin contar los cambios de exposición) y, si hay, lee el giroscopio. |
 | Nitidez | `js/imagen/nitidez.js` | Mide qué tan filosos son los bordes de las letras (gradiente entre contraste local, en el centro de cada borde). No depende de la luz ni del tamaño de la foto. |
 | Worker | `js/imagen/worker.js` | Las cuentas pesadas corren aparte para que la app no se trabe. |
@@ -97,7 +98,7 @@ Lo que sigue sale de lo que la gente les pide y les reclama a CamScanner, Genius
 - ✅ Aviso de foto borrosa, volver a tomar una página y tocar para enfocar.
 - ✅ Carpetas por clase y nombre automático («Cálculo – 27 sept»).
 - ✅ PDF con contraseña, gratis (AES-256).
-- Brillo y contraste a mano, guardables como perfil.
+- ✅ Brillo y contraste a mano.
 - ✅ Buscar texto dentro de todos los documentos.
 
 **Fase 3**
