@@ -19,7 +19,8 @@ const FABRICA = {
   vozVelocidad: 1,        // velocidad de la voz al escuchar el texto
   carpeta: null,          // carpeta elegida en el inicio: lo que se escanea se guarda ahí
   nube: null,             // respaldo en la nube: { codigo, ultimo, bytes, documentos, … } (ver nube.js)
-  dispositivo: null       // un número al azar de este teléfono (para notar si otro respalda con el mismo código)
+  dispositivo: null,      // un número al azar de este teléfono (para notar si otro respalda con el mismo código)
+  liviano: null           // trabajar con fotos más chicas (gama baja): null = según el teléfono (ver rendimiento.js)
 };
 
 let actuales = null;

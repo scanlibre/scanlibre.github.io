@@ -38,9 +38,10 @@ function cargarJsQR() {
 /**
  * Los códigos que hay en una imagen (canvas, bitmap, imagen o video).
  * @param varios buscar más de uno (en una página puede haber varios)
+ * @param lado   a qué tamaño mirar la imagen con jsQR (más chico: más rápido)
  * @returns [{ texto, formato }]
  */
-export async function leerCodigos(fuente, { varios = false } = {}) {
+export async function leerCodigos(fuente, { varios = false, lado = 1400 } = {}) {
   const d = await lectorNativo();
   if (d) {
     try {
@@ -49,7 +50,7 @@ export async function leerCodigos(fuente, { varios = false } = {}) {
     } catch (e) { /* si falla el del teléfono, se prueba con jsQR */ }
   }
   await cargarJsQR();
-  const img = aImageData(fuente, 1400);
+  const img = aImageData(fuente, lado);
   const leer = (x, y, w, h) => {
     const recorte = x || y || w !== img.width || h !== img.height ? recortar(img, x, y, w, h) : img;
     const r = window.jsQR(recorte.data, recorte.width, recorte.height, { inversionAttempts: 'attemptBoth' });

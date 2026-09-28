@@ -4,7 +4,7 @@
 // ID-1 de las tarjetas), como la fotocopia que piden en los trámites. Al
 // imprimir el PDF "a tamaño real" (100 %), la cédula mide lo mismo que la de verdad.
 
-import { procesar } from './motor.js';
+import { procesar, fotosEnWorker, paginaEnWorker } from './motor.js';
 import { aImageData, abrirFoto, canvasABlob, soltarCanvas } from './fotos.js';
 
 export const ID1 = { ancho: 85.6, alto: 53.98 };           // mm
@@ -36,18 +36,27 @@ export function disposicion(tamano, caras) {
  * @returns { blob, vertical }
  */
 export async function caraDeCedula(fuente, esquinas) {
-  const { imagen } = await procesar(aImageData(fuente), { esquinas, filtro: 'original', rotacion: 0, aplanar: false, dedos: false, maxLado: 1600 });
-  const vertical = imagen.height > imagen.width;
+  const opciones = { esquinas, filtro: 'original', rotacion: 0, aplanar: false, dedos: false, maxLado: 1600 };
+  // La cara enderezada: desde el archivo de la foto, en el worker si se puede
+  let plana;
+  if (fuente instanceof Blob && await fotosEnWorker()) {
+    plana = await abrirFoto((await paginaEnWorker(fuente, opciones)).procesada);
+  } else {
+    const bmp = fuente instanceof Blob ? await abrirFoto(fuente) : fuente;
+    const { imagen } = await procesar(aImageData(bmp), opciones);
+    if (fuente instanceof Blob) bmp.close?.();
+    plana = document.createElement('canvas');
+    plana.width = imagen.width; plana.height = imagen.height;
+    plana.getContext('2d').putImageData(imagen, 0, 0);
+  }
+  const vertical = plana.height > plana.width;
   const w = Math.round((vertical ? ID1.alto : ID1.ancho) * PPP), h = Math.round((vertical ? ID1.ancho : ID1.alto) * PPP);
-  const plana = document.createElement('canvas');
-  plana.width = imagen.width; plana.height = imagen.height;
-  plana.getContext('2d').putImageData(imagen, 0, 0);
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const ctx = c.getContext('2d');
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(plana, 0, 0, w, h);
-  soltarCanvas(plana);
+  if (plana.close) plana.close(); else soltarCanvas(plana);
   try { return { blob: await canvasABlob(c, 'image/jpeg', 0.92), vertical }; } finally { soltarCanvas(c); }
 }
 

@@ -3,7 +3,8 @@
 // Las fotos en ráfaga o importadas pasan por una cola, una por una, para no
 // llenar la memoria del teléfono.
 
-import { detectar, procesar, nitidez as medir, dividirLibro, luz } from './motor.js';
+import { detectar, procesar, nitidez as medir, dividirLibro, luz, fotosEnWorker, fotoEnWorker, paginaEnWorker } from './motor.js';
+import { ladoFoto, ladoPagina, ladoVista, anotarDemora } from './rendimiento.js';
 import { UMBRAL_BORROSA } from './imagen/nitidez.js';
 import { abrirFoto, aCanvas, aImageData, canvasABlob, imageDataABlob, normalizarFoto, soltarCanvas } from './fotos.js';
 import { agregarPagina, guardarDocumento, guardarPagina, obtenerDocumento, obtenerPagina, listarCarpetas, listarDocumentos, insertarPaginaDespues } from './db.js';
@@ -35,9 +36,72 @@ export async function buscarHoja(fuente) {
   return r && r.confianza >= 0.5 ? r.esquinas : null;
 }
 
-/** Endereza y filtra la foto; devuelve los Blob de la página y de su miniatura */
-async function renderizar(fuente, { esquinas, filtro, rotacion, aplanar = true, dedos = true, brillo = 0, contraste = 0, marcas = null }) {
-  const { imagen: res, nitidez, aplanada, sinDedos } = await procesar(aImageData(fuente), { esquinas, filtro, rotacion, aplanar, dedos, brillo, contraste, maxLado: 3000 });
+/**
+ * La foto (de la cámara o de la galería) lista para usar: orientada, sin
+ * pasar de ladoFoto() y en JPEG, con una vista chica para el recorte y la
+ * miniatura. Si se puede, todo se hace en el worker: la página no se traba.
+ * @param hoja    buscar las esquinas de la hoja
+ * @param nitidez medir si la hoja salió borrosa
+ * @returns { blob, ancho, alto, anchoOriginal, altoOriginal, vista, esquinas, borrosa, ms }
+ *   (la vista es un ImageBitmap o un canvas: soltarla con soltarVista cuando ya no se use)
+ */
+export async function prepararFoto(archivo, { hoja = true, nitidez = false } = {}) {
+  const inicio = performance.now();
+  let foto;
+  if (await fotosEnWorker()) {
+    try { foto = await fotoEnWorker(archivo, { maxLado: ladoFoto(), vista: ladoVista(), hoja, nitidez }); } catch (e) { console.warn('Foto en la página:', e); }
+  }
+  if (!foto) {
+    // Sin OffscreenCanvas en el worker: como antes, aquí en la página
+    const f = await normalizarFoto(archivo, ladoFoto());
+    let esquinas = null, borrosa = false;
+    if (hoja) esquinas = await buscarHoja(f.canvas);
+    if (nitidez) { try { borrosa = await fotoBorrosa(f.canvas, esquinas || TODA_LA_FOTO); } catch (e) {} }
+    const vista = aCanvas(f.canvas, ladoVista());
+    soltarCanvas(f.canvas);
+    foto = { blob: f.blob, ancho: f.ancho, alto: f.alto, anchoOriginal: f.anchoOriginal, altoOriginal: f.altoOriginal, vista, esquinas, borrosa };
+  }
+  foto.ms = Math.round(performance.now() - inicio);
+  anotarDemora(foto.ms);
+  return foto;
+}
+
+/** Suelta la vista chica de una foto de prepararFoto */
+export function soltarVista(foto) {
+  const v = foto?.vista;
+  if (!v) return;
+  if (v.close) v.close(); else soltarCanvas(v);
+  foto.vista = null;
+}
+
+/**
+ * Endereza y filtra la foto; devuelve los Blob de la página y de su miniatura.
+ * @param fuente el archivo de la foto (Blob: se hace todo en el worker si se puede), o un canvas o bitmap
+ */
+async function renderizar(fuente, { esquinas, filtro, rotacion, aplanar = true, dedos = true, brillo = 0, contraste = 0, marcas = null, maxLado = ladoPagina() }) {
+  const opciones = { esquinas, filtro, rotacion, aplanar, dedos, brillo, contraste, maxLado };
+  if (fuente instanceof Blob) {
+    let r = null;
+    if (await fotosEnWorker()) {
+      try { r = await paginaEnWorker(fuente, opciones, { png: filtro === 'bn' }); }
+      catch (e) { console.warn('Página en la página:', e); }
+    }
+    if (r) {
+      // La miniatura con las marcas encima (la página guardada va sin ellas)
+      if (marcas?.length) {
+        const bmp = await abrirFoto(r.miniatura);
+        const c = aCanvas(bmp, 360);
+        bmp.close?.();
+        dibujarMarcas(c.getContext('2d'), marcas, c.width, c.height);
+        r.miniatura = await canvasABlob(c, 'image/jpeg', 0.8);
+        soltarCanvas(c);
+      }
+      return r;
+    }
+    const bmp = await abrirFoto(fuente);
+    try { return await renderizar(bmp, { ...opciones, marcas }); } finally { bmp.close?.(); }
+  }
+  const { imagen: res, nitidez, aplanada, sinDedos } = await procesar(aImageData(fuente), opciones);
   // El blanco y negro se guarda en PNG: sin pérdida y liviano
   const procesada = await imageDataABlob(res, filtro === 'bn' ? 'image/png' : 'image/jpeg', 0.9);
   const lienzo = document.createElement('canvas');
@@ -53,13 +117,12 @@ async function renderizar(fuente, { esquinas, filtro, rotacion, aplanar = true, 
 }
 
 /**
- * Página nueva a partir de una foto ya normalizada ({ blob, ancho, alto, canvas }).
- * Si todo sale bien, el canvas de la foto se suelta: ya no se necesita.
+ * Página nueva a partir de una foto de prepararFoto ({ blob, ancho, alto, vista, esquinas }).
+ * Se arma desde el archivo de la foto (en el worker si se puede); la vista no se suelta aquí.
  */
-export async function crearPagina(foto, esquinas, { soltar = true, filtro = ajustes().filtro } = {}) {
-  const esq = esquinas || await buscarHoja(foto.canvas) || TODA_LA_FOTO;
-  const r = await renderizar(foto.canvas, { esquinas: esq, filtro, rotacion: 0 });
-  if (soltar) soltarCanvas(foto.canvas);
+export async function crearPagina(foto, esquinas, { filtro = ajustes().filtro } = {}) {
+  const esq = esquinas || foto.esquinas || (foto.vista && await buscarHoja(foto.vista)) || TODA_LA_FOTO;
+  const r = await renderizar(foto.blob, { esquinas: esq, filtro, rotacion: 0 });
   return { id: nuevoId(), original: foto.blob, ancho: foto.ancho, alto: foto.alto, esquinas: esq, filtro, rotacion: 0, aplanar: true, dedos: true, creada: Date.now(), ...r };
 }
 
@@ -71,7 +134,8 @@ export async function crearPagina(foto, esquinas, { soltar = true, filtro = ajus
 export async function crearPaginaDeCedula(caras, tamano = ajustes().pdfTamano) {
   const hoja = await hojaDeCedula(caras, tamano === 'a4' ? 'a4' : 'carta');
   const datos = { esquinas: TODA_LA_FOTO, filtro: 'original', rotacion: 0, aplanar: false, dedos: false };
-  const r = await renderizar(hoja.canvas, datos);
+  // A tamaño real y nítida (como antes, hasta 3000 px), también en gama baja
+  const r = await renderizar(hoja.canvas, { ...datos, maxLado: 3000 });
   soltarCanvas(hoja.canvas);
   // Casi toda la hoja es blanca: la nitidez no dice nada (cada cara se revisó al tomarla)
   return { id: nuevoId(), original: hoja.blob, ancho: hoja.ancho, alto: hoja.alto, ...datos, modo: 'cedula', creada: Date.now(), ...r, nitidez: null };
@@ -88,10 +152,11 @@ export async function esquinasDeLibro(fuente, esquinas) {
  * @returns [página] o [izquierda, derecha]
  */
 export async function crearPaginasDeLibro(foto, esquinas) {
-  const esq = esquinas || await buscarHoja(foto.canvas) || TODA_LA_FOTO;
-  const mitades = await esquinasDeLibro(foto.canvas, esq);
+  const esq = esquinas || foto.esquinas || await buscarHoja(foto.vista) || TODA_LA_FOTO;
+  // El lomo se busca en la vista (de 1600 a 2000 px): alcanza de sobra
+  const mitades = await esquinasDeLibro(foto.vista, esq);
   if (!mitades) return [await crearPagina(foto, esq)];
-  const izquierda = await crearPagina(foto, mitades[0], { soltar: false });
+  const izquierda = await crearPagina(foto, mitades[0]);
   return [izquierda, await crearPagina(foto, mitades[1])];
 }
 
@@ -107,8 +172,8 @@ export async function separarLibro(pagina) {
     if (!mitades) return null;
     // Las marcas no se reparten entre las dos páginas: se quitan (la vista lo avisa antes)
     const datos = { filtro: pagina.filtro, rotacion: 0, aplanar: pagina.aplanar !== false, dedos: pagina.dedos !== false, brillo: pagina.brillo || 0, contraste: pagina.contraste || 0, marcas: [] };
-    const izquierda = { ...pagina, ...datos, esquinas: mitades[0], ...(await renderizar(bitmap, { ...datos, esquinas: mitades[0] })), ocr: null };
-    const derecha = { ...pagina, ...datos, id: nuevoId(), creada: Date.now(), esquinas: mitades[1], ...(await renderizar(bitmap, { ...datos, esquinas: mitades[1] })), ocr: null };
+    const izquierda = { ...pagina, ...datos, esquinas: mitades[0], ...(await renderizar(pagina.original, { ...datos, esquinas: mitades[0] })), ocr: null };
+    const derecha = { ...pagina, ...datos, id: nuevoId(), creada: Date.now(), esquinas: mitades[1], ...(await renderizar(pagina.original, { ...datos, esquinas: mitades[1] })), ocr: null };
     await guardarPagina(izquierda);
     await insertarPaginaDespues(pagina.docId, pagina.id, derecha);
     return [izquierda, derecha];
@@ -123,9 +188,7 @@ export async function reprocesar(pagina, cambios) {
   // Al girar la página, sus marcas giran con ella
   const vueltas = ((datos.rotacion - pagina.rotacion) % 4 + 4) % 4;
   if (vueltas && datos.marcas.length && !('marcas' in cambios)) datos.marcas = girarMarcas(datos.marcas, vueltas, pagina.procAncho, pagina.procAlto);
-  const bitmap = await abrirFoto(pagina.original);
-  const r = await renderizar(bitmap, datos);
-  bitmap.close?.();
+  const r = await renderizar(pagina.original, datos);
   // El texto leído ya no corresponde a la página nueva
   const nueva = { ...pagina, ...datos, ...r, ocr: null };
   if (['cedula', 'pdf', 'portada'].includes(pagina.modo)) nueva.nitidez = null;
@@ -166,12 +229,15 @@ export async function guardarMarcas(pagina, marcas) {
  * enderezada y sin filtro, más chica (se arma una vez al abrir las barras).
  */
 export async function baseParaLuz(pagina, maxLado = 1400) {
+  const opciones = { esquinas: pagina.esquinas, filtro: 'original', rotacion: pagina.rotacion, aplanar: pagina.aplanar !== false, dedos: pagina.dedos !== false, maxLado };
+  // En el worker, si se puede: abrir la foto completa aquí traba al teléfono
+  if (await fotosEnWorker()) {
+    const bmp = await abrirFoto((await paginaEnWorker(pagina.original, opciones)).procesada);
+    try { return aImageData(bmp); } finally { bmp.close?.(); }
+  }
   const bitmap = await abrirFoto(pagina.original);
   try {
-    const { imagen } = await procesar(aImageData(bitmap), {
-      esquinas: pagina.esquinas, filtro: 'original', rotacion: pagina.rotacion, aplanar: pagina.aplanar !== false, dedos: pagina.dedos !== false, maxLado
-    });
-    return imagen;
+    return (await procesar(aImageData(bitmap), opciones)).imagen;
   } finally {
     bitmap.close?.();
   }
@@ -319,7 +385,10 @@ export const colaVacia = () => pendientes.size === 0;
 export function importarArchivos(docId, archivos, { filtro, pedirClave } = {}) {
   for (const archivo of archivos) {
     if (esPDF(archivo)) importarPDF(docId, archivo, { pedirClave });
-    else encolar(docId, async () => crearPagina(await normalizarFoto(archivo), undefined, filtro ? { filtro } : {}));
+    else encolar(docId, async () => {
+      const foto = await prepararFoto(archivo);
+      try { return await crearPagina(foto, undefined, filtro ? { filtro } : {}); } finally { soltarVista(foto); }
+    });
   }
   return cadena;
 }

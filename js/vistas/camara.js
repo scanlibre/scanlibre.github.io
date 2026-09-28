@@ -10,11 +10,12 @@ import { $, aviso, menu } from '../util.js';
 import { ir, volver } from '../rutas.js';
 import { ajustes, cambiarAjuste, modoCamara } from '../ajustes.js';
 import { detectar, nitidez } from '../motor.js';
-import { aCanvas, aImageData, canvasABlob, normalizarFoto, soltarCanvas, abrirFoto } from '../fotos.js';
+import { aCanvas, aImageData, canvasABlob, soltarCanvas, abrirFoto } from '../fotos.js';
+import { gamaBaja, ladoFoto, pausaDeteccion, videoIdeal } from '../rendimiento.js';
 import { caraDeCedula } from '../cedula.js';
 import { leerCodigos } from '../codigos.js';
 import { mostrarCodigo } from './codigo.js';
-import { buscarHoja, crearPagina, crearPaginasDeLibro, crearPaginaDeCedula, encolar, agregarPaginaRevisada, eventosPaginas, importarArchivos, nuevoDocumento, pendientesEnCola, fotoBorrosa, esBorrosa, TODA_LA_FOTO } from '../paginas.js';
+import { crearPagina, crearPaginasDeLibro, crearPaginaDeCedula, encolar, agregarPaginaRevisada, eventosPaginas, importarArchivos, nuevoDocumento, pendientesEnCola, esBorrosa, prepararFoto, soltarVista } from '../paginas.js';
 import { agregarPagina, reemplazarPagina } from '../db.js';
 import { elegirArchivos } from '../archivos.js';
 import { abrirRecorte } from './recorte.js';
@@ -26,7 +27,7 @@ const marco = $('#camara-marco');
 const pista = $('#camara-pista');
 
 let sesion = null;      // { docId, origen: 'inicio' | 'doc', cantidad, ultima (url) }
-let flujo = null, capturador = null, fotoCompletaFalla = false, motivoFalla = '';
+let flujo = null, capturador = null, fotoCompletaFalla = false, motivoFalla = '', pedidoFoto = null;
 let enfoques = [], midiendo = false, intentosEnfoque = 0;
 let activa = false, capturando = false, detectando = false, ultimaDeteccion = 0;
 let vivas = null, perdidas = 0, hojaDesde = 0, quietoDesde = 0, reintentos = 0;
@@ -88,14 +89,12 @@ async function encender() {
   const conFotoCompleta = 'ImageCapture' in window;
   let nuevo;
   try {
+    // Con la foto completa aparte, el video es solo para mirar: 1080p (720p en
+    // gama baja). Si la foto es un cuadro del video (iPhone), se pide 4K.
+    const { width, height } = videoIdeal(conFotoCompleta && !fotoCompletaFalla);
     nuevo = await navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: {
-        facingMode: { ideal: 'environment' },
-        // Video en 4K si la cámara lo permite: si la foto completa falla, el cuadro del video sale nítido
-        width: { ideal: 3840 },
-        height: { ideal: 2160 }
-      }
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: width }, height: { ideal: height } }
     });
   } catch (e) {
     if (activa && este === intento) sinCamara(motivo(e));
@@ -123,7 +122,7 @@ async function encender() {
   const linterna = $('#camara-linterna');
   linterna.hidden = !capacidades.torch;
   linterna.setAttribute('aria-pressed', 'false');
-  vivas = null; perdidas = 0; hojaDesde = 0; quietoDesde = 0; miniAnterior = null;
+  vivas = null; perdidas = 0; hojaDesde = 0; quietoDesde = 0; miniAnterior = null; ultimoCuadro = null;
   window.addEventListener('devicemotion', alGirar);
   requestAnimationFrame(cuadro);
 }
@@ -133,7 +132,7 @@ function apagar() {
   window.removeEventListener('devicemotion', alGirar);
   $('#camara-disparar').disabled = true;
   if (flujo) flujo.getTracks().forEach(t => t.stop());
-  flujo = null; capturador = null;
+  flujo = null; capturador = null; pedidoFoto = null;
   video.srcObject = null;
   vivas = null;
   limpiarMarco();
@@ -153,15 +152,33 @@ document.addEventListener('visibilitychange', () => {
 // ── Detección en vivo ───────────────────────────────────────────────
 const conLimite = (promesa, ms) => Promise.race([promesa, new Promise((_, no) => setTimeout(() => no(new Error('tiempo')), ms))]);
 
+/**
+ * El cuadro actual del video, chico (para buscar la hoja y medir si se mueve).
+ * Siempre en el mismo lienzo y sin "willReadFrequently": así el video se
+ * achica en la tarjeta de video y solo se leen los píxeles chicos. Leer un
+ * cuadro grande con la CPU es lo que más traba a los teléfonos sencillos.
+ */
+let lienzoVideo = null, ultimoCuadro = null;
+function cuadroChico(maxLado = 400) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const k = Math.min(1, maxLado / Math.max(vw, vh));
+  const w = Math.max(1, Math.round(vw * k)), h = Math.max(1, Math.round(vh * k));
+  if (!lienzoVideo) lienzoVideo = document.createElement('canvas');
+  if (lienzoVideo.width !== w || lienzoVideo.height !== h) { lienzoVideo.width = w; lienzoVideo.height = h; }
+  const ctx = lienzoVideo.getContext('2d');
+  ctx.drawImage(video, 0, 0, w, h);
+  return (ultimoCuadro = ctx.getImageData(0, 0, w, h));
+}
+
 function cuadro(t) {
   if (!activa || !flujo) return;
   requestAnimationFrame(cuadro);
   if (modoActual() === 'qr') return buscarCodigo(t);
   dibujarMarco();
-  if (detectando || capturando || t - ultimaDeteccion < 130 || video.readyState < 2 || !video.videoWidth) return;
+  if (detectando || capturando || t - ultimaDeteccion < pausaDeteccion() || video.readyState < 2 || !video.videoWidth) return;
   detectando = true;
   ultimaDeteccion = t;
-  const img = aImageData(video, 400);
+  const img = cuadroChico();
   medirMovimiento(img);
   // Con límite de tiempo: si una detección se traba, la cámara no se queda "pegada"
   conLimite(detectar(img), 2500)
@@ -178,7 +195,7 @@ function buscarCodigo(t) {
   if (leyendoCodigo || mostrandoCodigo || t - ultimaLectura < 250 || video.readyState < 2 || !video.videoWidth) return;
   leyendoCodigo = true;
   ultimaLectura = t;
-  conLimite(leerCodigos(video), 2500)
+  conLimite(leerCodigos(video, { lado: gamaBaja() ? 900 : 1400 }), 2500)
     .then(codigos => {
       const c = codigos[0];
       if (!c || !activa || modoActual() !== 'qr') return;
@@ -257,7 +274,7 @@ async function esperarQuietud(max = 1500) {
   let desde = 0;
   await pausa(150);
   while (activa && flujo && video.videoWidth && performance.now() - inicio < max) {
-    medirMovimiento(aImageData(video, 400));
+    medirMovimiento(cuadroChico());
     const ahora = performance.now();
     if (!estaQuieto(1 + (ahora - inicio) / max)) desde = 0;
     else if (!desde) desde = ahora;
@@ -356,13 +373,19 @@ function ponerPista(texto, encontrada) {
   pista.classList.toggle('encontrada', encontrada);
 }
 
+let marcoDibujado = '';
 function limpiarMarco() {
   marco.getContext('2d').clearRect(0, 0, marco.width, marco.height);
+  marcoDibujado = '';
 }
 
 function dibujarMarco() {
   const dpr = window.devicePixelRatio || 1;
   const cw = marco.clientWidth, ch = marco.clientHeight;
+  // Se vuelve a dibujar solo si algo cambió (no en cada cuadro)
+  const clave = vivas && video.videoWidth ? `${cw}x${ch}@${dpr}|${video.videoWidth}x${video.videoHeight}|${vivas.map(p => `${p.x.toFixed(4)},${p.y.toFixed(4)}`).join(' ')}` : `${cw}x${ch}@${dpr}`;
+  if (clave === marcoDibujado) return;
+  marcoDibujado = clave;
   if (marco.width !== Math.round(cw * dpr) || marco.height !== Math.round(ch * dpr)) {
     marco.width = Math.round(cw * dpr); marco.height = Math.round(ch * dpr);
   }
@@ -395,21 +418,47 @@ function dibujarMarco() {
  * La foto a la resolución máxima del sensor (si el navegador lo permite) o,
  * si no, el cuadro actual del video. Devuelve { blob, origen }.
  */
+/** Un valor dentro del rango de la cámara ({ min, max, step }), sin pasarse */
+const enRango = (v, r) => {
+  const min = r.min || 1, paso = r.step || 1;
+  return Math.max(min, Math.min(r.max, min + Math.floor((v - min) / paso) * paso));
+};
+
+/**
+ * Lo que se le pide a la cámara para la foto. Se arma una vez (preguntarle a
+ * la cámara qué puede hacer tarda en algunos teléfonos).
+ */
+async function armarPedidoFoto() {
+  const pedido = { tamano: null, sinFlash: false };
+  try {
+    const cap = await capturador.getPhotoCapabilities();
+    const W = cap.imageWidth?.max, H = cap.imageHeight?.max;
+    if (W && H) {
+      // Sin pedirla, algunos teléfonos (p. ej. Samsung) entregan la foto al tamaño del video. Pero la
+      // más grande de un sensor de 48 o 50 MP es enorme (8000 px) y traba al teléfono: se pide la más
+      // cercana a lo que se va a guardar (la cámara da la que tenga más parecida)
+      const k = Math.min(1, ladoFoto() / Math.max(W, H));
+      pedido.tamano = { imageWidth: enRango(Math.round(W * k), cap.imageWidth), imageHeight: enRango(Math.round(H * k), cap.imageHeight) };
+    }
+    pedido.sinFlash = !!cap.fillLightMode?.includes('off');
+  } catch (e) {}
+  return pedido;
+}
+
 async function tomarFoto() {
   if (capturador && !fotoCompletaFalla) {
     try {
-      const pedido = {};
-      try {
-        const cap = await capturador.getPhotoCapabilities();
-        // Sin pedirla, algunos teléfonos (p. ej. Samsung) entregan la foto al tamaño del video
-        if (cap.imageWidth?.max && cap.imageHeight?.max) { pedido.imageWidth = cap.imageWidth.max; pedido.imageHeight = cap.imageHeight.max; }
-        // Sin flash: en papel deja un reflejo blanco (la luz de la linterna sí se respeta)
-        if (cap.fillLightMode?.includes('off') && $('#camara-linterna').getAttribute('aria-pressed') !== 'true') pedido.fillLightMode = 'off';
-      } catch (e) {}
+      pedidoFoto = pedidoFoto || await armarPedidoFoto();
+      const pedido = { ...(pedidoFoto.tamano || {}) };
+      // Sin flash: en papel deja un reflejo blanco (la luz de la linterna sí se respeta)
+      if (pedidoFoto.sinFlash && $('#camara-linterna').getAttribute('aria-pressed') !== 'true') pedido.fillLightMode = 'off';
       return { blob: await conLimite(capturador.takePhoto(pedido), 8000), origen: 'foto completa' };
     } catch (e) {
       fotoCompletaFalla = true; // en este teléfono no sirve: se usa el cuadro del video
       motivoFalla = e.message;
+      // Desde ahora la foto es el cuadro del video: que sea lo más grande posible
+      const { width, height } = videoIdeal(false);
+      flujo?.getVideoTracks()[0]?.applyConstraints({ width: { ideal: width }, height: { ideal: height } }).catch(() => {});
     }
   }
   if (!video.videoWidth) throw new Error('La cámara todavía no está lista');
@@ -445,11 +494,15 @@ function destello() {
   navigator.vibrate?.(30);
 }
 
-/** Recuerda cómo se veía la hoja fotografiada, para no repetirla en la captura automática */
+/**
+ * Recuerda cómo se veía la hoja fotografiada, para no repetirla en la captura
+ * automática. Con el último cuadro que se miró (justo antes de la foto): leer
+ * uno nuevo justo después traba, porque la cámara se está reacomodando.
+ */
 function marcarTomada() {
   lista = false;
   pausaHasta = performance.now() + 1500;
-  firmaUltima = flujo && video.videoWidth ? firma(aImageData(video, 400)) : null;
+  firmaUltima = ultimoCuadro ? firma(ultimoCuadro) : null;
 }
 
 /** @param auto la tomó la captura automática (el teléfono ya estaba quieto) */
@@ -485,49 +538,55 @@ async function disparar(auto = false) {
  * (hasta 2 veces); si no, el recorte avisa.
  */
 async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, ms = null } = {}) {
-  const foto = await normalizarFoto(blob);
-  guardarDiagnostico({
-    video: video.videoWidth ? `${video.videoWidth} × ${video.videoHeight}` : 'sin video',
-    foto: `${foto.anchoOriginal} × ${foto.altoOriginal}`,
-    origen,
-    ms
-  });
   // Al volver a tomar una página es una sola hoja, con el filtro de siempre
   const modo = sesion.reemplazar ? 'hoja' : modoCamara();
   // La cédula siempre pasa por el recorte: hay que ver bien cada cara
   const rafaga = ajustes().rafaga && !sesion.reemplazar && modo !== 'cedula';
   const libro = modo === 'libro';
   const opciones = modo === 'pizarra' ? { filtro: 'pizarra' } : {};
-  let esquinas = null, borrosa = false;
-  if (!rafaga || auto) {
-    esquinas = await buscarHoja(foto.canvas);
-    try { borrosa = ajustes().filtro !== 'dibujo' && await fotoBorrosa(foto.canvas, esquinas || TODA_LA_FOTO); } catch (e) {}
-    if (auto && borrosa && reintentos < 2) {
-      reintentos++;
-      soltarCanvas(foto.canvas);
-      lista = true; firmaUltima = null; pausaHasta = 0;
-      hojaDesde = performance.now(); quietoDesde = 0; // vuelve a exigir quietud completa
-      ponerPista('Salió borrosa. Otra vez: no te muevas…', true);
-      return;
-    }
+  // Todo en el worker: abrirla, achicarla, guardarla, buscar la hoja y ver si salió borrosa
+  const revisar = !rafaga || auto;
+  const foto = await prepararFoto(blob, { hoja: true, nitidez: revisar && ajustes().filtro !== 'dibujo' });
+  guardarDiagnostico({
+    video: video.videoWidth ? `${video.videoWidth} × ${video.videoHeight}` : 'sin video',
+    foto: `${foto.anchoOriginal} × ${foto.altoOriginal}`,
+    origen,
+    ms,
+    preparar: foto.ms,
+    liviano: gamaBaja()
+  });
+  const esquinas = foto.esquinas, borrosa = revisar && foto.borrosa;
+  if (auto && borrosa && reintentos < 2) {
+    reintentos++;
+    soltarVista(foto);
+    lista = true; firmaUltima = null; pausaHasta = 0;
+    hojaDesde = performance.now(); quietoDesde = 0; // vuelve a exigir quietud completa
+    ponerPista('Salió borrosa. Otra vez: no te muevas…', true);
+    return;
   }
   reintentos = 0;
   if (modo === 'cedula') return caraDeLaCedula(foto, esquinas, borrosa);
   if (rafaga) {
-    // Sin parar: la página se arma en la cola
+    // Sin parar: la página se arma en la cola (en el worker)
     const docId = await asegurarDocumento();
-    contarPagina(await miniaturaDe(foto.canvas));
+    contarPagina(await miniaturaDe(foto.vista));
+    // La vista solo hace falta para buscar el lomo del libro: si no, se suelta ya
+    if (!libro) soltarVista(foto);
     const n = sesion.cantidad;
     encolar(docId, async () => {
-      const paginas = libro ? await crearPaginasDeLibro(foto, esquinas || undefined) : [await crearPagina(foto, esquinas || undefined, opciones)];
-      if (paginas.some(esBorrosa)) aviso(`La foto ${n} salió borrosa: revísala en el documento.`, 'error', 5000);
-      return paginas;
+      try {
+        const paginas = libro ? await crearPaginasDeLibro(foto, esquinas || undefined) : [await crearPagina(foto, esquinas || undefined, opciones)];
+        if (paginas.some(esBorrosa)) aviso(`La foto ${n} salió borrosa: revísala en el documento.`, 'error', 5000);
+        return paginas;
+      } finally {
+        soltarVista(foto);
+      }
     });
     ponerPista(`Página ${sesion.cantidad} guardada`, true);
     return;
   }
   abrirRecorte({
-    fuente: foto.canvas,
+    fuente: foto.vista,
     esquinas,
     borrosa,
     textoCancelar: 'Repetir foto',
@@ -553,7 +612,7 @@ async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, 
         if (paginas.length === 1) aviso('No encontré el lomo del libro: quedó como una sola página.', 'info', 5000);
         return volver('camara');
       }
-      const miniatura = await miniaturaDe(foto.canvas); // antes: crearPagina suelta el canvas
+      const miniatura = await miniaturaDe(foto.vista);
       try {
         await agregarPaginaRevisada(docId, await crearPagina(foto, esq, opciones));
       } catch (e) {
@@ -575,13 +634,13 @@ async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, 
 function caraDeLaCedula(foto, esquinas, borrosa) {
   const reverso = !!sesion.cedula;
   abrirRecorte({
-    fuente: foto.canvas,
+    fuente: foto.vista,
     esquinas,
     borrosa,
     textoCancelar: 'Repetir foto',
     titulo: reverso ? 'Reverso de la cédula' : 'Frente de la cédula',
     alListo: async esq => {
-      const cara = await caraDeCedula(foto.canvas, esq);
+      const cara = await caraDeCedula(foto.blob, esq);
       if (!reverso) {
         sesion.cedula = { frente: cara };
         pintarBotones();

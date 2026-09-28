@@ -1,54 +1,103 @@
 // ScanLibre · motor.js
-// Puente entre la página y el worker de imagen. Si el navegador no puede
-// abrir un worker de módulo, las mismas funciones corren aquí mismo.
+// Puente entre la página y los workers de imagen. Hay dos: uno para lo que
+// va en vivo con la cámara (buscar la hoja, medir si está nítida), que tiene
+// que contestar rápido, y otro para lo pesado (armar páginas). Así, mientras
+// se arma una página, la cámara sigue marcando la hoja. Si el navegador no
+// puede abrir un worker de módulo, las mismas funciones corren aquí mismo.
 
-let worker = null, listo = null, siguiente = 1, directo = null;
+const workers = {};   // 'vivo' | 'pesado' → { worker, listo: Promise<{ lienzo } | false> }
+let siguiente = 1, directo = null;
 const pendientes = new Map();
 
 /** Abre el worker y espera su saludo; si no contesta, se trabaja sin él */
-function abrirWorker() {
-  if (listo) return listo;
-  listo = new Promise(resolver => {
+function abrirWorker(cual) {
+  if (workers[cual]) return workers[cual].listo;
+  const w = workers[cual] = { worker: null, listo: null };
+  w.listo = new Promise(resolver => {
     try {
-      worker = new Worker(new URL('./imagen/worker.js', import.meta.url), { type: 'module' });
+      w.worker = new Worker(new URL('./imagen/worker.js', import.meta.url), { type: 'module' });
     } catch (e) {
-      worker = null;
+      w.worker = null;
       return resolver(false);
     }
-    const reloj = setTimeout(() => { worker.terminate(); worker = null; resolver(false); }, 8000);
-    worker.onerror = e => { e.preventDefault?.(); clearTimeout(reloj); worker = null; resolver(false); };
-    worker.onmessage = e => {
-      if (e.data.hola) { clearTimeout(reloj); resolver(true); return; }
+    const reloj = setTimeout(() => { w.worker.terminate(); w.worker = null; resolver(false); }, 8000);
+    let saludo = false;
+    w.worker.onerror = e => {
+      e.preventDefault?.();
+      clearTimeout(reloj);
+      w.worker = null;
+      if (!saludo) return resolver(false);
+      // Se cayó trabajando (en un teléfono sin memoria puede pasar): lo pendiente no se
+      // queda esperando para siempre, y el próximo pedido abre uno nuevo
+      caido(cual, new Error('El trabajo de imagen se detuvo (¿poca memoria?)'));
+    };
+    w.worker.onmessage = e => {
+      if (e.data.hola) { saludo = true; clearTimeout(reloj); resolver({ lienzo: !!e.data.lienzo }); return; }
       const p = pendientes.get(e.data.id);
       if (!p) return;
       pendientes.delete(e.data.id);
       if (e.data.error) p.rechazar(new Error(e.data.error)); else p.resolver(e.data.resultado);
     };
-    worker.postMessage({ tipo: 'hola' });
+    w.worker.postMessage({ tipo: 'hola' });
   });
-  return listo;
+  return w.listo;
 }
 
-async function pedir(mensaje, transferir) {
-  if (!(await abrirWorker()) || !worker) {
+/** Rechaza lo que esperaba a un worker que se cayó y lo olvida (el próximo pedido abre otro) */
+function caido(cual, error) {
+  for (const [id, p] of pendientes) if (p.cual === cual) { pendientes.delete(id); clearTimeout(p.reloj); p.rechazar(error); }
+  const w = workers[cual];
+  delete workers[cual];
+  try { w?.worker?.terminate(); } catch (e) {}
+}
+
+/**
+ * ¿El worker puede abrir, achicar y guardar fotos él solo? (si no, se hace en la página).
+ * `localStorage.scanlibre_fotos_en_pagina = '1'` obliga a hacerlo en la página (para probar ese camino).
+ */
+export async function fotosEnWorker() {
+  try { if (localStorage.getItem('scanlibre_fotos_en_pagina') === '1') return false; } catch (e) {}
+  const r = await abrirWorker('pesado');
+  return !!(r && r.lienzo && workers.pesado.worker);
+}
+
+/** @param limite ms: si el worker no contesta en ese tiempo, se da por caído */
+async function pedir(mensaje, transferir, cual = 'pesado', limite = 0) {
+  if (!(await abrirWorker(cual)) || !workers[cual].worker) {
     directo = directo || await import('./imagen/procesar.js');
     if (mensaje.tipo === 'detectar') return directo.detectarHoja(mensaje.imagen);
     if (mensaje.tipo === 'nitidez') return mensaje.opciones?.esquinas ? directo.nitidezDeHoja(mensaje.imagen, mensaje.opciones.esquinas) : directo.medirNitidez(mensaje.imagen);
     if (mensaje.tipo === 'lectura') return directo.prepararParaLeer(mensaje.imagen);
     if (mensaje.tipo === 'luz') return directo.aplicarFiltro(mensaje.imagen, mensaje.opciones.filtro, mensaje.opciones);
     if (mensaje.tipo === 'libro') return directo.dividirLibro(mensaje.imagen, mensaje.opciones.esquinas);
+    if (mensaje.tipo === 'foto' || mensaje.tipo === 'pagina') throw new Error('Sin worker para fotos');
     return directo.procesarPagina(mensaje.imagen, mensaje.opciones);
   }
   const id = siguiente++;
   return new Promise((resolver, rechazar) => {
-    pendientes.set(id, { resolver, rechazar });
-    worker.postMessage({ id, ...mensaje }, transferir);
+    const reloj = limite ? setTimeout(() => caido(cual, new Error('El trabajo de imagen tardó demasiado')), limite) : 0;
+    pendientes.set(id, { resolver: r => { clearTimeout(reloj); resolver(r); }, rechazar: e => { clearTimeout(reloj); rechazar(e); }, cual, reloj });
+    workers[cual].worker.postMessage({ id, ...mensaje }, transferir);
   });
 }
 
+/**
+ * La foto lista en el worker (ver fotosEnWorker): orientada, sin pasar de
+ * `maxLado`, en JPEG y con una vista chica (ImageBitmap) para mostrarla.
+ * @returns { blob, ancho, alto, anchoOriginal, altoOriginal, vista, esquinas, borrosa, ms }
+ */
+export const fotoEnWorker = (blob, { maxLado, vista, hoja = true, nitidez = false } = {}) =>
+  pedir({ tipo: 'foto', blob, maxLado, vista, hoja, nitidez }, undefined, 'pesado', 60000);
+
+/**
+ * La página armada en el worker desde el archivo de la foto.
+ * @returns { procesada, miniatura, procAncho, procAlto, nitidez, aplanada, sinDedos }
+ */
+export const paginaEnWorker = (blob, opciones, { png = false } = {}) => pedir({ tipo: 'pagina', blob, opciones, png }, undefined, 'pesado', 90000);
+
 /** Busca la hoja en una imagen chica (ImageData). Devuelve {esquinas, confianza} o null */
 export function detectar(imagen) {
-  return pedir({ tipo: 'detectar', imagen: { data: imagen.data, width: imagen.width, height: imagen.height } });
+  return pedir({ tipo: 'detectar', imagen: { data: imagen.data, width: imagen.width, height: imagen.height } }, undefined, 'vivo');
 }
 
 /**
@@ -69,7 +118,7 @@ export async function procesar(imagen, opciones) {
  * Devuelve { valor, borrosa }.
  */
 export function nitidez(imagen, esquinas) {
-  return pedir({ tipo: 'nitidez', imagen: { data: imagen.data, width: imagen.width, height: imagen.height }, opciones: esquinas ? { esquinas } : null });
+  return pedir({ tipo: 'nitidez', imagen: { data: imagen.data, width: imagen.width, height: imagen.height }, opciones: esquinas ? { esquinas } : null }, undefined, 'vivo');
 }
 
 /**

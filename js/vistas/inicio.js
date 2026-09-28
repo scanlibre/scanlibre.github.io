@@ -284,7 +284,10 @@ function acercaDe() {
       el('p', { text: 'El código está en github.com/scanlibre/scanlibre.github.io' }),
       el('p', {}, el('a', { href: 'privacidad.html', target: '_blank', rel: 'noopener', id: 'acerca-privacidad' }, 'Política de privacidad')),
       el('p', { class: 'acerca-version', text: `Versión ${VERSION}` }),
-      cam && el('p', { class: 'diagnostico', text: `Cámara · última foto: ${cam.foto} (${cam.origen}) · video: ${cam.video}` + (cam.ms ? ` · tardó ${(cam.ms / 1000).toFixed(1).replace('.', ',')} s` : '') })),
+      cam && el('p', { class: 'diagnostico', id: 'acerca-camara', text: `Cámara · última foto: ${cam.foto} (${cam.origen}) · video: ${cam.video}` +
+        (cam.ms ? ` · tardó ${(cam.ms / 1000).toFixed(1).replace('.', ',')} s` : '') +
+        (typeof cam.preparar === 'number' ? ` · armarla: ${(cam.preparar / 1000).toFixed(1).replace('.', ',')} s` : '') +
+        (cam.liviano ? ' · modo liviano (gama baja)' : '') })),
     el('div', { class: 'hoja-botones' }, el('button', { class: 'boton boton-primario', onclick: () => cerrar() }, 'Cerrar'))
   ]);
 }
