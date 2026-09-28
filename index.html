@@ -56,6 +56,12 @@
   <symbol id="i-word" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z"/><path d="M14 3v5h5M8.5 12l1.3 5 1.7-4 1.7 4 1.3-5"/></symbol>
   <symbol id="i-libro" viewBox="0 0 24 24"><path d="M12 6.8C10 5.2 7 4.6 3.5 5v13.2c3.5-.4 6.5.2 8.5 1.8 2-1.6 5-2.2 8.5-1.8V5C17 4.6 14 5.2 12 6.8zM12 6.8V20"/></symbol>
   <symbol id="i-brillo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M2.5 12h2M19.5 12h2M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
+  <symbol id="i-resaltador" viewBox="0 0 24 24"><path d="M15.2 4.2l4.6 4.6-8.3 8.3H6.9v-4.6z"/><path d="M6.9 17.1L4 20h5M13.5 20.5H20"/></symbol>
+  <symbol id="i-lapiz" viewBox="0 0 24 24"><path d="M4 20l1.2-4.8L16.3 4.1a2 2 0 0 1 2.8 0l.8.8a2 2 0 0 1 0 2.8L8.8 18.8 4 20z"/><path d="M14.4 6l3.6 3.6"/></symbol>
+  <symbol id="i-nota" viewBox="0 0 24 24"><path d="M5 4h14a1 1 0 0 1 1 1v9.5L14.5 20H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M20 14.5h-4.5a1 1 0 0 0-1 1V20M8 9h8M8 12.5h5"/></symbol>
+  <symbol id="i-firma" viewBox="0 0 24 24"><path d="M3 16.5c2.4 0 3.4-8.5 5.4-8.5s-1 8.5 1.6 8.5 2.4-4.8 3.9-4.8 1 2.9 2.5 2.9 2-1 3.6-1"/><path d="M3 20.5h18"/></symbol>
+  <symbol id="i-borrador" viewBox="0 0 24 24"><path d="M9 20h11M4.9 13.9l8.5-8.5a2 2 0 0 1 2.8 0l3.3 3.3a2 2 0 0 1 0 2.8L12 19.1a3 3 0 0 1-4.2 0l-2.9-2.9a1.6 1.6 0 0 1 0-2.3zM9.2 9.6l6.2 6.2"/></symbol>
+  <symbol id="i-deshacer" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
   <symbol id="i-imagen" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol>
 </svg>
 
@@ -227,8 +233,31 @@
       <button class="herramienta" id="pagina-girar-der"><svg class="icono"><use href="#i-girar-der"/></svg><span>Girar</span></button>
       <button class="herramienta" id="pagina-recortar"><svg class="icono"><use href="#i-recortar"/></svg><span>Recortar</span></button>
       <button class="herramienta" id="pagina-luz-abrir"><svg class="icono"><use href="#i-brillo"/></svg><span>Brillo</span></button>
+      <button class="herramienta" id="pagina-marcar"><svg class="icono"><use href="#i-resaltador"/></svg><span>Marcar</span></button>
       <button class="herramienta" id="pagina-texto"><svg class="icono"><use href="#i-texto"/></svg><span>Texto</span></button>
       <button class="herramienta" id="pagina-mas" aria-label="Más opciones de la página"><svg class="icono"><use href="#i-menu"/></svg><span>Más</span></button>
+    </footer>
+  </section>
+
+  <!-- ═══ MARCAR ═══ -->
+  <section id="vista-marcar" class="vista vista-oscura" hidden aria-labelledby="marcar-titulo">
+    <header class="barra barra-oscura">
+      <button class="boton-icono" id="marcar-cancelar" aria-label="Salir sin guardar"><svg class="icono"><use href="#i-cerrar"/></svg></button>
+      <h1 id="marcar-titulo">Marcar</h1>
+      <button class="boton-icono" id="marcar-deshacer" aria-label="Deshacer" disabled><svg class="icono"><use href="#i-deshacer"/></svg></button>
+      <button class="boton boton-primario boton-chico" id="marcar-listo"><svg class="icono"><use href="#i-listo"/></svg>Listo</button>
+    </header>
+    <div class="marcar" id="marcar-area">
+      <canvas id="marcar-lienzo" aria-label="La página. Con un dedo se marca; con dos se acerca y se mueve."></canvas>
+      <p id="marcar-pista" class="marcar-pista" aria-live="polite"></p>
+    </div>
+    <div class="marcar-colores" id="marcar-colores" role="group" aria-label="Color"></div>
+    <footer class="herramientas herramientas-oscuras" role="toolbar" aria-label="Herramientas para marcar">
+      <button class="herramienta" id="marcar-resaltador" aria-pressed="true"><svg class="icono"><use href="#i-resaltador"/></svg><span>Resaltar</span></button>
+      <button class="herramienta" id="marcar-lapiz" aria-pressed="false"><svg class="icono"><use href="#i-lapiz"/></svg><span>Lápiz</span></button>
+      <button class="herramienta" id="marcar-nota"><svg class="icono"><use href="#i-nota"/></svg><span>Nota</span></button>
+      <button class="herramienta" id="marcar-firma"><svg class="icono"><use href="#i-firma"/></svg><span>Firma</span></button>
+      <button class="herramienta" id="marcar-borrador" aria-pressed="false"><svg class="icono"><use href="#i-borrador"/></svg><span>Borrar</span></button>
     </footer>
   </section>
 

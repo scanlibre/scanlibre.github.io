@@ -1,19 +1,19 @@
 // ScanLibre · vistas/pagina.js
-// Una página: filtros, brillo, girar, recortar de nuevo, moverla, guardarla o borrarla.
+// Una página: filtros, brillo, girar, recortar de nuevo, marcarla, moverla, guardarla o borrarla.
 
 import { $, el, aviso, confirmar, nombreArchivo, menu } from '../util.js';
 import { obtenerDocumento, guardarDocumento, obtenerPagina, borrarPagina } from '../db.js';
 import { ir, volver } from '../rutas.js';
-import { reprocesar, esBorrosa, separarLibro, baseParaLuz, conLuz } from '../paginas.js';
+import { reprocesar, esBorrosa, separarLibro, baseParaLuz, conLuz, lienzoConMarcas } from '../paginas.js';
 import { nuevaSesion } from './camara.js';
-import { abrirFoto } from '../fotos.js';
+import { abrirFoto, canvasABlob, soltarCanvas } from '../fotos.js';
 import { FILTROS } from '../imagen/filtros.js';
 import { cambiarAjuste } from '../ajustes.js';
 import { abrirRecorte } from './recorte.js';
 import { mostrarTexto } from './texto.js';
 import { puedeCompartir, compartir, descargar } from '../exportar.js';
 
-let doc = null, pagina = null, n = 1, url = null, trabajando = false;
+let doc = null, pagina = null, n = 1, url = null, trabajando = false, turnoImagen = 0;
 let luz = null; // mientras se ajusta el brillo: { base, brillo, contraste, ocupado, otra }
 const ruta = (...partes) => ['doc', encodeURIComponent(doc.id), ...partes].join('/');
 
@@ -29,6 +29,7 @@ export async function mostrar(params) {
 
 export function ocultar() {
   cerrarLuz();
+  turnoImagen++;
   if (url) URL.revokeObjectURL(url);
   url = null;
 }
@@ -36,11 +37,7 @@ export function ocultar() {
 function pintar() {
   const total = doc.paginas.length;
   $('#pagina-titulo').textContent = `Página ${n} de ${total}`;
-  if (url) URL.revokeObjectURL(url);
-  url = URL.createObjectURL(pagina.procesada);
-  const img = $('#pagina-imagen');
-  img.src = url;
-  img.alt = `Página ${n} de ${doc.nombre}`;
+  const imagen = ponerImagen();
   for (const b of $('#pagina-filtros').children) b.setAttribute('aria-pressed', String(b.dataset.filtro === pagina.filtro));
   $('#pagina-anterior').disabled = n <= 1;
   $('#pagina-siguiente').disabled = n >= total;
@@ -55,6 +52,26 @@ function pintar() {
   $('#pagina-dedos').hidden = !pagina.sinDedos && !conDedos;
   $('#pagina-dedos-texto').textContent = conDedos ? 'Dedos sin tapar.' : 'Se taparon los dedos de los bordes.';
   $('#pagina-dedos-boton').textContent = conDedos ? 'Tapar' : 'Deshacer';
+  return imagen;
+}
+
+/** La imagen de la página; si tiene marcas, con ellas encima */
+async function ponerImagen() {
+  const turno = ++turnoImagen, p = pagina;
+  let blob = p.procesada;
+  if (p.marcas?.length) {
+    try {
+      const c = await lienzoConMarcas(p, 2400);
+      blob = await canvasABlob(c, 'image/jpeg', 0.9);
+      soltarCanvas(c);
+    } catch (e) { console.error(e); }
+  }
+  if (turno !== turnoImagen) return;
+  if (url) URL.revokeObjectURL(url);
+  url = URL.createObjectURL(blob);
+  const img = $('#pagina-imagen');
+  img.src = url;
+  img.alt = `Página ${n} de ${doc.nombre}` + (p.marcas?.length ? ' (con marcas)' : '');
 }
 
 /** Corre un cambio con el aviso de "Procesando…" encima de la página */
@@ -73,7 +90,7 @@ async function conEspera(trabajo) {
   }
 }
 
-const cambiar = cambios => conEspera(async () => { pagina = await reprocesar(pagina, cambios); pintar(); });
+const cambiar = cambios => conEspera(async () => { pagina = await reprocesar(pagina, cambios); await pintar(); });
 
 // ── Brillo y contraste ──────────────────────────────────────────────
 // Mientras se mueven las barras se ve cómo queda, con la página más chica;
@@ -183,11 +200,18 @@ async function recortar() {
 }
 
 async function guardarImagen() {
-  const nombre = nombreArchivo(`${doc.nombre} - página ${n}`, pagina.procesada.type === 'image/png' ? 'png' : 'jpg');
-  if (puedeCompartir(pagina.procesada, nombre)) {
-    try { await compartir(pagina.procesada, nombre); } catch (e) { descargar(pagina.procesada, nombre); }
+  let blob = pagina.procesada;
+  // Con las marcas: la página entera con ellas encima
+  if (pagina.marcas?.length) {
+    const c = await lienzoConMarcas(pagina);
+    blob = await canvasABlob(c, 'image/jpeg', 0.92);
+    soltarCanvas(c);
+  }
+  const nombre = nombreArchivo(`${doc.nombre} - página ${n}`, blob.type === 'image/png' ? 'png' : 'jpg');
+  if (puedeCompartir(blob, nombre)) {
+    try { await compartir(blob, nombre); } catch (e) { descargar(blob, nombre); }
   } else {
-    descargar(pagina.procesada, nombre);
+    descargar(blob, nombre);
   }
 }
 
@@ -218,7 +242,12 @@ async function masOpciones() {
 }
 
 // Libro abierto en una sola página: se separa en dos (la derecha queda después)
-const separar = () => conEspera(async () => {
+const separar = async () => {
+  if (!pagina || trabajando) return;
+  if (pagina.marcas?.length && !await confirmar('¿Separar la página?', { detalle: 'Las marcas de esta página (resaltador, notas y firma) se quitan al separarla.', aceptar: 'Separar' })) return;
+  return separarYa();
+};
+const separarYa = () => conEspera(async () => {
   if (!pagina) return;
   const r = await separarLibro(pagina);
   if (!r) return aviso('No encontré el lomo del libro. Si es un libro abierto, toca Recortar y deja adentro las dos páginas.', 'error', 6000);
@@ -260,6 +289,7 @@ export function iniciar() {
   $('#pagina-luz-cancelar').addEventListener('click', () => cerrarLuz());
   $('#pagina-luz-listo').addEventListener('click', listoLuz);
   $('#pagina-mas').addEventListener('click', masOpciones);
+  $('#pagina-marcar').addEventListener('click', () => { if (pagina && !trabajando) ir(ruta('pagina', n, 'marcar')); });
   $('#pagina-texto').addEventListener('click', () => { if (pagina) mostrarTexto([pagina], { titulo: `Texto de la página ${n}`, nombre: `${doc.nombre} – página ${n}` }); });
   $('#pagina-borrar').addEventListener('click', borrar);
 }

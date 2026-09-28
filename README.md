@@ -17,6 +17,7 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Páginas curvas de libros:** si la hoja no queda plana (cerca del lomo o con una esquina levantada), sigue los renglones de texto y los endereza. En una hoja plana no toca nada, y en cada página se puede deshacer.
 - **Esquinas a mano** con lupa; se ven sobre papel blanco y sobre fondos oscuros.
 - **Brillo y contraste a mano** en cada página, viendo cómo queda mientras se mueven las barras. El brillo aclara u oscurece los tonos medios sin ensuciar el papel blanco (sirve para el lápiz suave); en B/N cambia el grosor de las letras.
+- **Marcar la página:** resaltador de 4 colores que se endereza solo y se ajusta al renglón y a las palabras que tocas, lápiz para escribir o subrayar, notas adhesivas y **firma** (se dibuja una vez con el dedo y queda guardada). Las marcas se ven en la página, en la miniatura y en el PDF; se pueden deshacer, borrar o mover, y el texto se sigue leyendo sin ellas. Con dos dedos se acerca la página.
 - **Filtros:** Original, Mejorada (papel blanco sin sombras y sin saturar los colores), Dibujo (para lápiz y bocetos: se ven hasta los trazos más suaves), Gris y B/N (umbral local tipo Sauvola: no se come el texto suave ni deja manchas negras con la sombra del lomo de un libro).
 - **Texto (OCR), gratis y sin internet:** copiar o compartir el texto de una página o de todo el documento, en español, inglés o los dos. Y **PDF con texto buscable**: se ve igual, pero se pueden buscar y copiar las palabras. Antes de leer, la página se prepara (papel parejo, más contraste y nitidez): así lee también la letra chica de un libro.
 - **El texto a Word (.docx)** para seguir trabajándolo, con los renglones de cada párrafo juntados y las listas aparte.
@@ -39,6 +40,7 @@ La detección, los filtros, el PDF y el respaldo están escritos para esta app, 
 |---|---|---|
 | Detección | `js/imagen/deteccion.js` | Bordes (Canny) sobre brillo y saturación; los candidatos salen de grupos de bordes, zonas claras u oscuras (Otsu) y rectas largas (Hough, con el sentido del contraste). Cada lado se afina ajustando una recta y se califica por borde real y por contraste entre adentro y afuera. |
 | Dedos | `js/imagen/dedos.js` | Manchas con color de piel pegadas a un borde y con forma de dedo, más su sombra maciza; se tapan con el color del papel de alrededor. |
+| Marcas | `js/marcas.js` | Resaltador, lápiz, notas y firma en fracciones de la página: se dibujan a cualquier tamaño (el resaltador "multiplica", así las letras de abajo siguen negras). El trazo casi derecho se endereza por mínimos cuadrados y se ajusta al renglón buscando las filas con tinta y las palabras bajo él. Al girar la página, giran con ella. |
 | Libro | `js/imagen/libro.js` | Busca el lomo en el libro abierto enderezado y parte sus esquinas en dos hojas con la homografía. |
 | Páginas curvas | `js/imagen/aplanar.js` | Busca los renglones en franjas verticales, les ajusta una curva y corre cada columna para dejarlos rectos. |
 | Proporción | `js/imagen/geometria.js` | Homografía y proporción real de la hoja (método de Zhang y He). |

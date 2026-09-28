@@ -9,6 +9,7 @@ import { abrirFoto, aCanvas, aImageData, canvasABlob, imageDataABlob, normalizar
 import { agregarPagina, guardarDocumento, guardarPagina, obtenerDocumento, obtenerPagina, listarCarpetas, listarDocumentos, insertarPaginaDespues } from './db.js';
 import { nuevoId, nombrePorDefecto, fechaDeClase } from './util.js';
 import { ajustes } from './ajustes.js';
+import { dibujarMarcas, girarMarcas } from './marcas.js';
 
 export const TODA_LA_FOTO = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }];
 
@@ -31,7 +32,7 @@ export async function buscarHoja(fuente) {
 }
 
 /** Endereza y filtra la foto; devuelve los Blob de la página y de su miniatura */
-async function renderizar(fuente, { esquinas, filtro, rotacion, aplanar = true, dedos = true, brillo = 0, contraste = 0 }) {
+async function renderizar(fuente, { esquinas, filtro, rotacion, aplanar = true, dedos = true, brillo = 0, contraste = 0, marcas = null }) {
   const { imagen: res, nitidez, aplanada, sinDedos } = await procesar(aImageData(fuente), { esquinas, filtro, rotacion, aplanar, dedos, brillo, contraste, maxLado: 3000 });
   // El blanco y negro se guarda en PNG: sin pérdida y liviano
   const procesada = await imageDataABlob(res, filtro === 'bn' ? 'image/png' : 'image/jpeg', 0.9);
@@ -40,6 +41,8 @@ async function renderizar(fuente, { esquinas, filtro, rotacion, aplanar = true, 
   lienzo.getContext('2d').putImageData(res, 0, 0);
   const chico = aCanvas(lienzo, 360);
   soltarCanvas(lienzo);
+  // La miniatura con las marcas encima (la página guardada va sin ellas)
+  if (marcas?.length) dibujarMarcas(chico.getContext('2d'), marcas, chico.width, chico.height);
   const miniatura = await canvasABlob(chico, 'image/jpeg', 0.8);
   soltarCanvas(chico);
   return { procesada, procAncho: res.width, procAlto: res.height, miniatura, nitidez, aplanada, sinDedos };
@@ -85,7 +88,8 @@ export async function separarLibro(pagina) {
   try {
     const mitades = await esquinasDeLibro(bitmap, pagina.esquinas);
     if (!mitades) return null;
-    const datos = { filtro: pagina.filtro, rotacion: 0, aplanar: pagina.aplanar !== false, dedos: pagina.dedos !== false, brillo: pagina.brillo || 0, contraste: pagina.contraste || 0 };
+    // Las marcas no se reparten entre las dos páginas: se quitan (la vista lo avisa antes)
+    const datos = { filtro: pagina.filtro, rotacion: 0, aplanar: pagina.aplanar !== false, dedos: pagina.dedos !== false, brillo: pagina.brillo || 0, contraste: pagina.contraste || 0, marcas: [] };
     const izquierda = { ...pagina, ...datos, esquinas: mitades[0], ...(await renderizar(bitmap, { ...datos, esquinas: mitades[0] })), ocr: null };
     const derecha = { ...pagina, ...datos, id: nuevoId(), creada: Date.now(), esquinas: mitades[1], ...(await renderizar(bitmap, { ...datos, esquinas: mitades[1] })), ocr: null };
     await guardarPagina(izquierda);
@@ -98,7 +102,10 @@ export async function separarLibro(pagina) {
 
 /** Vuelve a armar la página con otras esquinas, filtro, giro, aplanado o brillo, y la guarda */
 export async function reprocesar(pagina, cambios) {
-  const datos = { esquinas: pagina.esquinas, filtro: pagina.filtro, rotacion: pagina.rotacion, aplanar: pagina.aplanar !== false, dedos: pagina.dedos !== false, brillo: pagina.brillo || 0, contraste: pagina.contraste || 0, ...cambios };
+  const datos = { esquinas: pagina.esquinas, filtro: pagina.filtro, rotacion: pagina.rotacion, aplanar: pagina.aplanar !== false, dedos: pagina.dedos !== false, brillo: pagina.brillo || 0, contraste: pagina.contraste || 0, marcas: pagina.marcas || [], ...cambios };
+  // Al girar la página, sus marcas giran con ella
+  const vueltas = ((datos.rotacion - pagina.rotacion) % 4 + 4) % 4;
+  if (vueltas && datos.marcas.length && !('marcas' in cambios)) datos.marcas = girarMarcas(datos.marcas, vueltas, pagina.procAncho, pagina.procAlto);
   const bitmap = await abrirFoto(pagina.original);
   const r = await renderizar(bitmap, datos);
   bitmap.close?.();
@@ -106,6 +113,28 @@ export async function reprocesar(pagina, cambios) {
   const nueva = { ...pagina, ...datos, ...r, ocr: null };
   await guardarPagina(nueva);
   const doc = await obtenerDocumento(pagina.docId);
+  if (doc) { doc.modificado = Date.now(); await guardarDocumento(doc); }
+  return nueva;
+}
+
+/** La página con sus marcas encima, en un canvas de lado máximo `maxLado` */
+export async function lienzoConMarcas(pagina, maxLado = Infinity) {
+  const bmp = await abrirFoto(pagina.procesada);
+  const c = aCanvas(bmp, maxLado);
+  bmp.close?.();
+  if (pagina.marcas?.length) dibujarMarcas(c.getContext('2d'), pagina.marcas, c.width, c.height);
+  return c;
+}
+
+/** Guarda las marcas de la página (y su miniatura con ellas) */
+export async function guardarMarcas(pagina, marcas) {
+  const actual = (await obtenerPagina(pagina.id)) || pagina;
+  const nueva = { ...actual, marcas };
+  const c = await lienzoConMarcas(nueva, 360);
+  nueva.miniatura = await canvasABlob(c, 'image/jpeg', 0.8);
+  soltarCanvas(c);
+  await guardarPagina(nueva);
+  const doc = await obtenerDocumento(actual.docId);
   if (doc) { doc.modificado = Date.now(); await guardarDocumento(doc); }
   return nueva;
 }

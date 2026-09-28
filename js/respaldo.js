@@ -6,6 +6,7 @@
 
 import { listarDocumentos, paginasDe, reemplazarDocumento, listarCarpetas, guardarCarpeta } from './db.js';
 import { abrirFoto, aCanvas, canvasABlob } from './fotos.js';
+import { dibujarMarcas } from './marcas.js';
 
 const MANIFIESTO = 'scanlibre-respaldo.json';
 
@@ -119,7 +120,7 @@ export async function crearRespaldo() {
           id: p.id, ancho: p.ancho, alto: p.alto, esquinas: p.esquinas, filtro: p.filtro, rotacion: p.rotacion,
           procAncho: p.procAncho, procAlto: p.procAlto, creada: p.creada, ocr: p.ocr || null, nitidez: p.nitidez ?? null,
           aplanar: p.aplanar !== false, aplanada: !!p.aplanada, dedos: p.dedos !== false, sinDedos: !!p.sinDedos,
-          brillo: p.brillo || 0, contraste: p.contraste || 0, original, procesada
+          brillo: p.brillo || 0, contraste: p.contraste || 0, marcas: p.marcas || [], original, procesada
         };
       })
     });
@@ -147,13 +148,16 @@ export async function restaurarRespaldo(archivo) {
       const original = zip.get(p.original), procesada = zip.get(p.procesada);
       if (!original || !procesada) continue;
       const bmp = await abrirFoto(conTipo(procesada, p.procesada));
-      const miniatura = await canvasABlob(aCanvas(bmp, 360), 'image/jpeg', 0.8);
+      const chico = aCanvas(bmp, 360);
       bmp.close?.();
+      const marcas = Array.isArray(p.marcas) ? p.marcas : [];
+      if (marcas.length) dibujarMarcas(chico.getContext('2d'), marcas, chico.width, chico.height);
+      const miniatura = await canvasABlob(chico, 'image/jpeg', 0.8);
       paginas.push({
         id: p.id, ancho: p.ancho, alto: p.alto, esquinas: p.esquinas, filtro: p.filtro, rotacion: p.rotacion || 0,
         procAncho: p.procAncho, procAlto: p.procAlto, creada: p.creada, ocr: p.ocr || null, nitidez: p.nitidez ?? null,
         aplanar: p.aplanar !== false, aplanada: !!p.aplanada, dedos: p.dedos !== false, sinDedos: !!p.sinDedos,
-        brillo: p.brillo || 0, contraste: p.contraste || 0,
+        brillo: p.brillo || 0, contraste: p.contraste || 0, marcas,
         original: conTipo(original, p.original), procesada: conTipo(procesada, p.procesada), miniatura
       });
     }

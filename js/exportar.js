@@ -3,6 +3,7 @@
 
 import { crearPDF, crearPDFConContrasena, aBits } from './pdf.js';
 import { abrirFoto, aCanvas, canvasABlob } from './fotos.js';
+import { dibujarMarcas } from './marcas.js';
 
 export const CALIDADES = {
   liviana: { texto: 'Liviana', detalle: 'Para subir a plataformas', maxLado: 1650, jpeg: 0.62 },
@@ -35,7 +36,10 @@ export async function generarPDF(doc, paginas, { tamano = 'carta', calidad = 'no
     const bmp = await abrirFoto(p.procesada);
     const c = aCanvas(bmp, cfg.maxLado);
     bmp.close?.();
-    if (p.filtro === 'bn' && typeof CompressionStream !== 'undefined') {
+    // Resaltador, notas y firma encima de la página (con color: la página va en JPEG aunque sea B/N)
+    const conMarcas = p.marcas?.length > 0;
+    if (conMarcas) dibujarMarcas(c.getContext('2d'), p.marcas, c.width, c.height);
+    if (p.filtro === 'bn' && !conMarcas && typeof CompressionStream !== 'undefined') {
       const img = c.getContext('2d').getImageData(0, 0, c.width, c.height);
       partes.push({ tipo: 'bits', bytes: await comprimir(aBits(img)), ancho: c.width, alto: c.height });
     } else {

@@ -6,6 +6,7 @@
 //   #/recorte              ajustar esquinas (solo tiene sentido viniendo de otra pantalla)
 //   #/doc/ID               documento
 //   #/doc/ID/pagina/N      página N del documento
+//   #/doc/ID/pagina/N/marcar  resaltar, escribir, notas y firma en la página N
 
 import { aviso } from './util.js';
 
@@ -21,6 +22,7 @@ function leerRuta() {
   const params = Object.fromEntries(new URLSearchParams(consulta || ''));
   if (p[0] === 'camara') return ['camara', params];
   if (p[0] === 'recorte') return ['recorte', params];
+  if (p[0] === 'doc' && p[1] && p[2] === 'pagina' && p[4] === 'marcar') return ['marcar', { doc: p[1], n: Math.max(1, parseInt(p[3], 10) || 1) }];
   if (p[0] === 'doc' && p[1] && p[2] === 'pagina') return ['pagina', { doc: p[1], n: Math.max(1, parseInt(p[3], 10) || 1) }];
   if (p[0] === 'doc' && p[1]) return ['documento', { doc: p[1] }];
   return ['inicio', {}];

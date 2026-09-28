@@ -9,8 +9,9 @@ import * as camara from './vistas/camara.js';
 import * as recorte from './vistas/recorte.js';
 import * as documento from './vistas/documento.js';
 import * as pagina from './vistas/pagina.js';
+import * as marcar from './vistas/marcar.js';
 
-const vistas = { inicio, camara, recorte, documento, pagina };
+const vistas = { inicio, camara, recorte, documento, pagina, marcar };
 for (const v of Object.values(vistas)) v.iniciar();
 registrarVistas(vistas);
 
