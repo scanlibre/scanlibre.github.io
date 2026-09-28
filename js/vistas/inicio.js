@@ -14,6 +14,9 @@ import { elegirArchivos } from '../archivos.js';
 import { crearRespaldo, restaurarRespaldo } from '../respaldo.js';
 import { puedeCompartir, compartir, descargar } from '../exportar.js';
 import { mostrarPapelera, enPapelera } from './papelera.js';
+import { recordarRespaldo } from '../recordatorio.js';
+import { bloqueo } from '../bloqueo.js';
+import { configurarBloqueo } from './bloqueo.js';
 
 let urls = [];
 const soltarUrls = () => { urls.forEach(u => URL.revokeObjectURL(u)); urls = []; };
@@ -51,7 +54,21 @@ export async function mostrar() {
   const vacia = $('#inicio-carpeta-vacia');
   vacia.hidden = !elegida || visibles.length > 0;
   if (elegida) vacia.textContent = `Todavía no hay documentos en «${elegida.nombre}». Lo que escanees ahora se guarda aquí.`;
+  pintarRecordatorio(docs);
 }
+
+// ── Recordatorio de respaldo ────────────────────────────────────────
+// Los documentos solo están en el teléfono: de vez en cuando se recuerda
+// guardar un respaldo en archivo fuera de él.
+function pintarRecordatorio(docs) {
+  const r = buscando ? null : recordarRespaldo(docs, { ultimo: ajustes().ultimoRespaldo, pospuesto: ajustes().respaldoPospuesto });
+  $('#inicio-respaldo').hidden = !r;
+  if (r) $('#inicio-respaldo-texto').textContent = r.nunca
+    ? 'Tus documentos solo están en este teléfono. Guarda un respaldo en archivo por si lo pierdes.'
+    : `Tu último respaldo es de hace ${r.dias} días y tienes cambios nuevos. Guarda uno nuevo por si pierdes el teléfono.`;
+}
+
+const respaldoHecho = () => { cambiarAjuste('ultimoRespaldo', Date.now()); $('#inicio-respaldo').hidden = true; };
 
 // ── Carpetas ────────────────────────────────────────────────────────
 function pintarCarpetas(carpetas, elegida) {
@@ -113,6 +130,7 @@ let buscando = false, leyendo = false, reloj = null;
 
 function abrirBusqueda() {
   buscando = true;
+  $('#inicio-respaldo').hidden = true;
   $('#inicio-busqueda').hidden = false;
   $('#inicio-carpetas').hidden = true;
   $('#inicio-buscar').hidden = true;
@@ -249,10 +267,13 @@ async function respaldar() {
   const nombre = `ScanLibre-respaldo-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.zip`;
   await hoja(cerrar => [
     el('h2', { class: 'hoja-titulo', text: 'Respaldo listo' }),
-    el('p', { class: 'hoja-detalle', text: `${documentos === 1 ? '1 documento' : documentos + ' documentos'} en un solo archivo (${tamanoLegible(blob.size)}). Guárdalo en Drive, en tu correo o en la computadora. Para recuperarlo en otro teléfono, abre ScanLibre y elige "Restaurar un respaldo".` }),
+    el('p', { class: 'hoja-detalle', text: `${documentos === 1 ? '1 documento' : documentos + ' documentos'} en un solo archivo (${tamanoLegible(blob.size)}).` }),
+    el('ol', { class: 'hoja-detalle pasos-respaldo' },
+      el('li', { text: 'Guárdalo fuera del teléfono: en Drive, en tu correo o en la computadora.' }),
+      el('li', { text: 'Para pasarlo a otro teléfono, abre ScanLibre allí: Menú → Restaurar un respaldo → elige el archivo.' })),
     el('div', { class: 'hoja-botones' },
-      el('button', { class: 'boton boton-secundario', onclick: () => { descargar(blob, nombre); cerrar(); } }, 'Descargar'),
-      puedeCompartir(blob, nombre) && el('button', { class: 'boton boton-primario', onclick: async () => { try { await compartir(blob, nombre); cerrar(); } catch (e) { aviso('No se pudo compartir: ' + e.message, 'error'); } } }, 'Guardar en…'))
+      el('button', { class: 'boton boton-secundario', onclick: () => { descargar(blob, nombre); respaldoHecho(); cerrar(); } }, 'Descargar'),
+      puedeCompartir(blob, nombre) && el('button', { class: 'boton boton-primario', onclick: async () => { try { if (await compartir(blob, nombre)) respaldoHecho(); cerrar(); } catch (e) { aviso('No se pudo compartir: ' + e.message, 'error'); } } }, 'Guardar en…'))
   ]);
 }
 
@@ -262,6 +283,7 @@ async function restaurar() {
   aviso('Restaurando…');
   try {
     const n = await restaurarRespaldo(archivo);
+    respaldoHecho(); // lo que se acaba de restaurar ya está en ese archivo
     aviso(n === 1 ? 'Listo: se restauró 1 documento.' : `Listo: se restauraron ${n} documentos.`, 'exito');
     mostrar();
   } catch (e) {
@@ -296,6 +318,8 @@ export function iniciar() {
   $('#inicio-consulta').addEventListener('input', () => { clearTimeout(reloj); reloj = setTimeout(buscar, 150); });
   $('#inicio-consulta').addEventListener('keydown', e => { if (e.key === 'Escape') cerrarBusqueda(); });
   $('#inicio-leer-todo').addEventListener('click', leerPendientes);
+  $('#inicio-respaldo-hacer').addEventListener('click', () => respaldar().catch(e => aviso('Algo salió mal: ' + e.message, 'error')));
+  $('#inicio-respaldo-despues').addEventListener('click', () => { cambiarAjuste('respaldoPospuesto', Date.now()); $('#inicio-respaldo').hidden = true; });
   $('#inicio-escanear').addEventListener('click', () => { nuevaSesion(null, 'inicio'); ir('camara'); });
   $('#inicio-importar').addEventListener('click', importar);
   $('#inicio-menu').addEventListener('click', async () => {
@@ -304,12 +328,14 @@ export function iniciar() {
       { valor: 'respaldar', texto: 'Respaldar todo en un archivo', icono: 'respaldo' },
       { valor: 'restaurar', texto: 'Restaurar un respaldo', icono: 'restaurar' },
       { valor: 'papelera', texto: enLaPapelera ? `Papelera (${enLaPapelera})` : 'Papelera', icono: 'basura' },
+      { valor: 'bloqueo', texto: bloqueo() ? 'Bloqueo con PIN (activado)' : 'Bloqueo con PIN', icono: 'candado' },
       { valor: 'acerca', texto: 'Acerca de ScanLibre', icono: 'info' }
     ]);
     try {
       if (opcion === 'papelera') await mostrarPapelera(() => mostrar());
       else if (opcion === 'respaldar') await respaldar();
       else if (opcion === 'restaurar') await restaurar();
+      else if (opcion === 'bloqueo') await configurarBloqueo();
       else if (opcion === 'acerca') await acercaDe();
     } catch (e) {
       aviso('Algo salió mal: ' + e.message, 'error');

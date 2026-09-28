@@ -5,6 +5,7 @@ import { registrarVistas, iniciarRutas } from './rutas.js';
 import { aviso } from './util.js';
 import { eventosPaginas, colaVacia } from './paginas.js';
 import { vaciarPapelera } from './db.js';
+import { vigilarBloqueo } from './vistas/bloqueo.js';
 import * as inicio from './vistas/inicio.js';
 import * as camara from './vistas/camara.js';
 import * as recorte from './vistas/recorte.js';
@@ -23,6 +24,9 @@ if (window.top !== window.self) {
   document.body.append(abrir);
   throw new Error('ScanLibre no se abre dentro de otra página');
 }
+
+// Si la persona puso un PIN, la app empieza bloqueada (antes de mostrar nada)
+vigilarBloqueo();
 
 const vistas = { inicio, camara, recorte, documento, pagina, marcar };
 for (const v of Object.values(vistas)) v.iniciar();

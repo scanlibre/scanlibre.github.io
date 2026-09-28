@@ -19,6 +19,8 @@ import { crearPagina, crearPaginasDeLibro, crearPaginaDeCedula, encolar, agregar
 import { agregarPagina, reemplazarPagina } from '../db.js';
 import { elegirArchivos } from '../archivos.js';
 import { abrirRecorte } from './recorte.js';
+import { configurarBloqueo } from './bloqueo.js';
+import { bloqueo } from '../bloqueo.js';
 import { miniGris, diferenciaMedia, MOV_QUIETO } from '../imagen/movimiento.js';
 
 const vista = $('#vista-camara');
@@ -652,13 +654,23 @@ function caraDeLaCedula(foto, esquinas, borrosa) {
       await agregarPagina(docId, pagina);
       sesion.cedula = null;
       contarPagina(URL.createObjectURL(pagina.miniatura));
-      aviso('Listo: el frente y el reverso quedaron en una hoja, a tamaño real.', 'exito', 4500);
+      sugerirPin();
       volver('camara');
     },
     alCancelar: () => {
       lista = true; firmaUltima = null; reintentos = 0;
       volver('camara');
     }
+  });
+}
+
+/** La cédula es un dato sensible: la primera vez, se ofrece proteger la app con un PIN */
+function sugerirPin() {
+  const listo = 'Listo: el frente y el reverso quedaron en una hoja, a tamaño real.';
+  if (bloqueo() || ajustes().pinSugerido) return aviso(listo, 'exito', 4500);
+  cambiarAjuste('pinSugerido', true);
+  aviso(listo + ' Como es tu cédula, puedes proteger ScanLibre con un PIN.', 'exito', 8000, {
+    accion: { texto: 'Poner PIN', alTocar: () => configurarBloqueo() }
   });
 }
 

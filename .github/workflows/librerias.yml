@@ -1,0 +1,27 @@
+name: Librerías de vendor
+
+# Dependabot no ve las librerías copiadas en vendor/ (Tesseract.js, pdf.js,
+# jsQR): esto revisa cada mes si hay versión nueva o aviso de seguridad, y
+# abre un issue si hay algo que revisar.
+on:
+  schedule:
+    - cron: '23 14 1 * *'   # el día 1 de cada mes
+  workflow_dispatch:
+  pull_request:
+    paths: ['vendor/**', '.github/scripts/librerias.mjs', '.github/workflows/librerias.yml']
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Versiones nuevas y avisos de seguridad
+        run: node .github/scripts/librerias.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

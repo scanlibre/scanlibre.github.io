@@ -30,6 +30,17 @@ function abrir() {
   return conexion;
 }
 
+/** Borra todos los documentos de este teléfono (cuando se olvidó el PIN del bloqueo) */
+export function borrarBaseDeDatos() {
+  const abierta = conexion;
+  conexion = null;
+  abierta?.then(db => db.close(), () => {});
+  return new Promise(resolver => {
+    const pedido = indexedDB.deleteDatabase(NOMBRE);
+    pedido.onsuccess = pedido.onerror = pedido.onblocked = () => resolver();
+  });
+}
+
 function hecho(req) {
   return new Promise((resolver, rechazar) => { req.onsuccess = () => resolver(req.result); req.onerror = () => rechazar(req.error); });
 }

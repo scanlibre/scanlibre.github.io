@@ -182,6 +182,9 @@ img { display: block; }
 }
 .sin-leer p { flex: 1 1 180px; margin: 0; font-size: 0.9rem; }
 .sin-leer .boton { min-height: 40px; }
+.recordatorio-botones { display: flex; gap: 6px; margin-left: auto; }
+.pasos-respaldo { margin: 8px 0; padding-left: 22px; }
+.pasos-respaldo li { margin: 4px 0; }
 .doc-fragmento { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 mark { background: var(--marca-suave); color: var(--texto); border-radius: 3px; padding: 0 2px; font-weight: 650; }
 .carpeta-vacia { text-align: center; color: var(--texto-2); padding: 32px 16px; margin: 0; }
@@ -653,3 +656,19 @@ mark { background: var(--marca-suave); color: var(--texto); border-radius: 3px; 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ── Bloqueo con PIN ──────────────────────────────────────────────── */
+body.bloqueada > :not(.bloqueo) { visibility: hidden; }
+body.bloqueada dialog { display: none !important; }
+.bloqueo {
+  position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; overflow-y: auto;
+  padding: calc(24px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom)); background: var(--fondo);
+}
+.bloqueo-caja { width: 100%; max-width: 360px; display: grid; gap: 12px; justify-items: center; text-align: center; }
+.bloqueo-titulo { font-size: 1.35rem; line-height: 1.25; margin: 6px 0 0; }
+.bloqueo-detalle { color: var(--texto-2); margin: 0; }
+.bloqueo-pin { width: 100%; text-align: center; font-size: 1.5rem; letter-spacing: 0.35em; }
+.bloqueo-mensaje { min-height: 1.3em; margin: 0; color: var(--peligro); font-size: 0.92rem; }
+.bloqueo-caja .boton, .bloqueo-caja .hoja-botones { width: 100%; }
+.bloqueo-caja .hoja-botones .boton { width: auto; flex: 1; }
+.pin-error { color: var(--peligro); min-height: 1.2em; margin: 6px 0 0; }

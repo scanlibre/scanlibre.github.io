@@ -18,6 +18,10 @@ const FABRICA = {
   ocrIdioma: 'spa',
   vozVelocidad: 1,        // velocidad de la voz al escuchar el texto
   carpeta: null,          // carpeta elegida en el inicio: lo que se escanea se guarda ahí
+  ultimoRespaldo: null,   // cuándo se guardó o se restauró el último respaldo en archivo (ver recordatorio.js)
+  respaldoPospuesto: null, // cuándo se tocó "Ahora no" en el recordatorio de respaldo
+  bloqueo: null,          // bloqueo con PIN: { sal, hash, iter, espera, huella } (ver bloqueo.js); nunca el PIN
+  pinSugerido: false,     // ya se sugirió poner un PIN (al guardar una cédula)
   liviano: null           // trabajar con fotos más chicas (gama baja): null = según el teléfono (ver rendimiento.js)
 };
 

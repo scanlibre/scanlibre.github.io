@@ -69,6 +69,8 @@
   <symbol id="i-portada" viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M8.5 7h7M9.5 10h5M8 15.5h8M9.5 18h5"/></symbol>
   <symbol id="i-qr" viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z"/><path d="M14 14h2.5v2.5H14zM20 14v2.5M14 20h2.5M19 19h1v1h-1z"/></symbol>
   <symbol id="i-traducir" viewBox="0 0 24 24"><path d="M3.5 5.5h9M8 3.5v2M10.5 5.5c-.8 3.8-3.3 6.8-6.5 8.5M6 8.5c1.2 2.4 3 4.2 5.5 5.5"/><path d="M12.5 20.5l4-10 4 10M14 17h5"/></symbol>
+  <symbol id="i-candado" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3M12 14.5v2.5"/></symbol>
+  <symbol id="i-huella" viewBox="0 0 24 24"><path d="M6.2 6.1A8 8 0 0 1 20 11.5v1M4.3 9.3A8 8 0 0 1 5 8M4 13.5V12a8 8 0 0 1 .1-1.2"/><path d="M8 12a4 4 0 0 1 8 0v1.5c0 2.6-.6 4.8-1.8 6.6"/><path d="M12 12v1.5c0 3.1-.9 5.5-2.5 7.2"/><path d="M8 15.3c0 1.9-.5 3.5-1.5 4.8"/></symbol>
   <symbol id="i-imagen" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol>
 </svg>
 
@@ -93,6 +95,13 @@
     <div id="inicio-sin-leer" class="sin-leer" role="status" hidden>
       <p id="inicio-sin-leer-texto"></p>
       <button class="boton boton-secundario" id="inicio-leer-todo"><svg class="icono"><use href="#i-texto"/></svg>Leer ahora</button>
+    </div>
+    <div id="inicio-respaldo" class="sin-leer recordatorio" role="status" hidden>
+      <p id="inicio-respaldo-texto"></p>
+      <div class="recordatorio-botones">
+        <button class="boton boton-fantasma" id="inicio-respaldo-despues">Ahora no</button>
+        <button class="boton boton-secundario" id="inicio-respaldo-hacer"><svg class="icono"><use href="#i-respaldo"/></svg>Respaldar</button>
+      </div>
     </div>
     <nav class="carpetas" id="inicio-carpetas" aria-label="Carpetas"></nav>
     <div class="contenido">

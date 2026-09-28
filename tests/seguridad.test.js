@@ -64,6 +64,25 @@ describe('Seguridad: configuración', () => {
     }
   });
 
+  it('el inventario de vendor/ dice las versiones que de verdad están incluidas', () => {
+    const v = JSON.parse(leer('vendor/versiones.json'));
+    assert.ok(leer('vendor/pdfjs/pdf.min.mjs').includes(`"${v['pdfjs-dist']}"`), 'pdf.js');
+    assert.ok(leer('vendor/tesseract/tesseract.min.js').includes(`"${v['tesseract.js']}"`), 'Tesseract.js');
+    assert.ok(leer('vendor/tesseract/LEEME.md').includes(`tesseract.js-core) ${v['tesseract.js-core']}`), 'núcleo de Tesseract');
+    assert.ok(leer('vendor/jsqr/LEEME.md').includes(`jsQR) ${v.jsqr}`), 'jsQR');
+    for (const version of Object.values(v)) assert.ok(leer('SECURITY.md').includes(version), `SECURITY.md: ${version}`);
+  });
+
+  it('las reglas de main piden las pruebas que de verdad corren en cada pull request', () => {
+    const reglas = JSON.parse(leer('.github/reglas/main.json'));
+    const pedidas = reglas.rules.find(r => r.type === 'required_status_checks').parameters.required_status_checks.map(c => c.context);
+    const pruebas = leer('.github/workflows/pruebas.yml');
+    assert.match(pruebas, /on:\s*\n\s*pull_request:\s*\n/, 'Pruebas corre en todos los pull request');
+    for (const trabajo of pedidas) assert.match(pruebas, new RegExp(`^  ${trabajo}:$`, 'm'), trabajo);
+    assert.ok(reglas.rules.some(r => r.type === 'pull_request') && reglas.rules.some(r => r.type === 'non_fast_forward'));
+    assert.deepEqual(reglas.bypass_actors, [], 'nadie se las salta');
+  });
+
   it('pdf.js no compila código de los PDF; hay a quién reportar una falla', () => {
     assert.match(leer('js/importar.js'), /isEvalSupported: false/);
     assert.match(leer('SECURITY.md'), /Report a vulnerability/);
