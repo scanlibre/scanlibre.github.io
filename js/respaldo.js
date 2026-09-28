@@ -118,7 +118,7 @@ export async function crearRespaldo() {
         return {
           id: p.id, ancho: p.ancho, alto: p.alto, esquinas: p.esquinas, filtro: p.filtro, rotacion: p.rotacion,
           procAncho: p.procAncho, procAlto: p.procAlto, creada: p.creada, ocr: p.ocr || null, nitidez: p.nitidez ?? null,
-          aplanar: p.aplanar !== false, aplanada: !!p.aplanada, original, procesada
+          aplanar: p.aplanar !== false, aplanada: !!p.aplanada, dedos: p.dedos !== false, sinDedos: !!p.sinDedos, original, procesada
         };
       })
     });
@@ -151,7 +151,7 @@ export async function restaurarRespaldo(archivo) {
       paginas.push({
         id: p.id, ancho: p.ancho, alto: p.alto, esquinas: p.esquinas, filtro: p.filtro, rotacion: p.rotacion || 0,
         procAncho: p.procAncho, procAlto: p.procAlto, creada: p.creada, ocr: p.ocr || null, nitidez: p.nitidez ?? null,
-        aplanar: p.aplanar !== false, aplanada: !!p.aplanada,
+        aplanar: p.aplanar !== false, aplanada: !!p.aplanada, dedos: p.dedos !== false, sinDedos: !!p.sinDedos,
         original: conTipo(original, p.original), procesada: conTipo(procesada, p.procesada), miniatura
       });
     }

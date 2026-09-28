@@ -187,3 +187,20 @@ export function libroAbierto({ ancho = 1400, alto = 1000, lomo = 0.52, semilla =
   }
   return { data, width: ancho, height: alto };
 }
+
+/** Pinta un dedo que entra por el borde derecho, a la altura `y` (fracción), con su sombra */
+export function conDedo(img, { y = 0.8, piel = [205, 142, 112] } = {}) {
+  const { width: w, height: h } = img, data = new Uint8ClampedArray(img.data);
+  const yc = y * h, largo = w * 0.14, grosor = h * 0.035;
+  for (let py = 0; py < h; py++) for (let px = 0; px < w; px++) {
+    // Un dedo: rectángulo con la punta redonda que sale del borde
+    const dx = Math.max(0, (w - largo + grosor) - px), dy = py - yc;
+    const d = Math.hypot(dx, dy) / grosor;
+    if (px < w - largo || d > 1.25) continue;
+    const i = (py * w + px) * 4;
+    if (d > 1) { for (let c = 0; c < 3; c++) data[i + c] *= 0.75; continue; } // sombra alrededor
+    const luz = 0.75 + 0.25 * (1 - d * d);
+    for (let c = 0; c < 3; c++) data[i + c] = piel[c] * luz;
+  }
+  return { data, width: w, height: h };
+}

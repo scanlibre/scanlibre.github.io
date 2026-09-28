@@ -31,8 +31,8 @@ export async function buscarHoja(fuente) {
 }
 
 /** Endereza y filtra la foto; devuelve los Blob de la página y de su miniatura */
-async function renderizar(fuente, { esquinas, filtro, rotacion, aplanar = true }) {
-  const { imagen: res, nitidez, aplanada } = await procesar(aImageData(fuente), { esquinas, filtro, rotacion, aplanar, maxLado: 3000 });
+async function renderizar(fuente, { esquinas, filtro, rotacion, aplanar = true, dedos = true }) {
+  const { imagen: res, nitidez, aplanada, sinDedos } = await procesar(aImageData(fuente), { esquinas, filtro, rotacion, aplanar, dedos, maxLado: 3000 });
   // El blanco y negro se guarda en PNG: sin pérdida y liviano
   const procesada = await imageDataABlob(res, filtro === 'bn' ? 'image/png' : 'image/jpeg', 0.9);
   const lienzo = document.createElement('canvas');
@@ -42,7 +42,7 @@ async function renderizar(fuente, { esquinas, filtro, rotacion, aplanar = true }
   soltarCanvas(lienzo);
   const miniatura = await canvasABlob(chico, 'image/jpeg', 0.8);
   soltarCanvas(chico);
-  return { procesada, procAncho: res.width, procAlto: res.height, miniatura, nitidez, aplanada };
+  return { procesada, procAncho: res.width, procAlto: res.height, miniatura, nitidez, aplanada, sinDedos };
 }
 
 /**
@@ -54,7 +54,7 @@ export async function crearPagina(foto, esquinas, { soltar = true } = {}) {
   const esq = esquinas || await buscarHoja(foto.canvas) || TODA_LA_FOTO;
   const r = await renderizar(foto.canvas, { esquinas: esq, filtro, rotacion: 0 });
   if (soltar) soltarCanvas(foto.canvas);
-  return { id: nuevoId(), original: foto.blob, ancho: foto.ancho, alto: foto.alto, esquinas: esq, filtro, rotacion: 0, aplanar: true, creada: Date.now(), ...r };
+  return { id: nuevoId(), original: foto.blob, ancho: foto.ancho, alto: foto.alto, esquinas: esq, filtro, rotacion: 0, aplanar: true, dedos: true, creada: Date.now(), ...r };
 }
 
 /** Las esquinas de las dos páginas de un libro abierto en la foto (canvas o bitmap), o null */
@@ -85,7 +85,7 @@ export async function separarLibro(pagina) {
   try {
     const mitades = await esquinasDeLibro(bitmap, pagina.esquinas);
     if (!mitades) return null;
-    const datos = { filtro: pagina.filtro, rotacion: 0, aplanar: pagina.aplanar !== false };
+    const datos = { filtro: pagina.filtro, rotacion: 0, aplanar: pagina.aplanar !== false, dedos: pagina.dedos !== false };
     const izquierda = { ...pagina, ...datos, esquinas: mitades[0], ...(await renderizar(bitmap, { ...datos, esquinas: mitades[0] })), ocr: null };
     const derecha = { ...pagina, ...datos, id: nuevoId(), creada: Date.now(), esquinas: mitades[1], ...(await renderizar(bitmap, { ...datos, esquinas: mitades[1] })), ocr: null };
     await guardarPagina(izquierda);
@@ -98,7 +98,7 @@ export async function separarLibro(pagina) {
 
 /** Vuelve a armar la página con otras esquinas, filtro, giro o aplanado, y la guarda */
 export async function reprocesar(pagina, cambios) {
-  const datos = { esquinas: pagina.esquinas, filtro: pagina.filtro, rotacion: pagina.rotacion, aplanar: pagina.aplanar !== false, ...cambios };
+  const datos = { esquinas: pagina.esquinas, filtro: pagina.filtro, rotacion: pagina.rotacion, aplanar: pagina.aplanar !== false, dedos: pagina.dedos !== false, ...cambios };
   const bitmap = await abrirFoto(pagina.original);
   const r = await renderizar(bitmap, datos);
   bitmap.close?.();
@@ -113,7 +113,7 @@ export async function reprocesar(pagina, cambios) {
 /** Qué versión de la página es: si cambia (filtro, recorte, giro), el texto leído deja de servir */
 // LECTOR sube cuando cambia cómo se lee (así los textos viejos se vuelven a leer)
 const LECTOR = 3;
-const versionDe = p => `l${LECTOR}|${p.filtro}|${p.rotacion}|${p.aplanar !== false}|${p.procAncho}x${p.procAlto}|${JSON.stringify(p.esquinas)}`;
+const versionDe = p => `l${LECTOR}|${p.filtro}|${p.rotacion}|${p.aplanar !== false}|${p.dedos !== false}|${p.procAncho}x${p.procAlto}|${JSON.stringify(p.esquinas)}`;
 
 /** El texto ya leído de la página, si sigue siendo de esta versión de la página (si no, null) */
 export const textoLeido = p => (p.ocr && p.ocr.version === versionDe(p) ? p.ocr.texto : null);

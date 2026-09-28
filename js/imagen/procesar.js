@@ -9,6 +9,7 @@ import { tamanoEnderezado } from './geometria.js';
 import { medirNitidez } from './nitidez.js';
 import { prepararParaLeer } from './lectura.js';
 import { aplanarPagina } from './aplanar.js';
+import { quitarDedos } from './dedos.js';
 import { buscarLomo, dividirEsquinas } from './libro.js';
 
 export { detectarHoja, medirNitidez, prepararParaLeer };
@@ -18,9 +19,10 @@ export { detectarHoja, medirNitidez, prepararParaLeer };
  * @param esquinas [tl, tr, br, bl] en fracciones (0..1) de la foto
  * @param maxLado  la página final no pasa de este tamaño (px)
  * @param aplanar  enderezar los renglones si la hoja está curva (libros)
- * @returns { data, width, height, nitidez, aplanada } (aplanada: si de verdad hizo falta enderezarla)
+ * @param dedos    tapar los dedos que sostienen la hoja en los bordes
+ * @returns { data, width, height, nitidez, aplanada, sinDedos } (si de verdad hizo falta enderezarla o tapar dedos)
  */
-export function procesarPagina(imagen, { esquinas, filtro = 'mejorada', rotacion = 0, maxLado = 3000, aplanar = true }) {
+export function procesarPagina(imagen, { esquinas, filtro = 'mejorada', rotacion = 0, maxLado = 3000, aplanar = true, dedos = true }) {
   const px = esquinas.map(p => ({ x: p.x * imagen.width, y: p.y * imagen.height }));
   const t = tamanoEnderezado(px, imagen.width, imagen.height);
   const k = Math.min(1, maxLado / Math.max(t.ancho, t.alto));
@@ -28,9 +30,11 @@ export function procesarPagina(imagen, { esquinas, filtro = 'mejorada', rotacion
   // Se aplana ya girada: los renglones tienen que quedar acostados
   const girada = rotar90(plana, rotacion);
   const { imagen: lista, aplanada } = aplanar ? aplanarPagina(girada) : { imagen: girada, aplanada: false };
-  const r = aplicarFiltro(lista, filtro);
+  // Los dedos se buscan antes del filtro: con los colores de la foto
+  const { imagen: limpia, quitados } = dedos ? quitarDedos(lista) : { imagen: lista, quitados: false };
+  const r = aplicarFiltro(limpia, filtro);
   // La nitidez se mide en la hoja enderezada sin filtro: el B/N o un dibujo no la engañan
-  return { data: r.data, width: r.width, height: r.height, nitidez: medirNitidez(plana).valor, aplanada };
+  return { data: r.data, width: r.width, height: r.height, nitidez: medirNitidez(plana).valor, aplanada, sinDedos: quitados };
 }
 
 /**

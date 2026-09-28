@@ -47,6 +47,11 @@ function pintar() {
   $('#pagina-curva').hidden = !pagina.aplanada && !sinAplanar;
   $('#pagina-curva-texto').textContent = sinAplanar ? 'Página sin enderezar.' : 'Se enderezaron los renglones curvos.';
   $('#pagina-curva-boton').textContent = sinAplanar ? 'Enderezar' : 'Deshacer';
+  // Igual con los dedos tapados
+  const conDedos = pagina.dedos === false;
+  $('#pagina-dedos').hidden = !pagina.sinDedos && !conDedos;
+  $('#pagina-dedos-texto').textContent = conDedos ? 'Dedos sin tapar.' : 'Se taparon los dedos de los bordes.';
+  $('#pagina-dedos-boton').textContent = conDedos ? 'Tapar' : 'Deshacer';
   $('#pagina-mover-antes').disabled = n <= 1;
   $('#pagina-mover-despues').disabled = n >= total;
 }
@@ -134,6 +139,7 @@ export function iniciar() {
   $('#pagina-mover-antes').addEventListener('click', () => mover(-1));
   $('#pagina-mover-despues').addEventListener('click', () => mover(1));
   $('#pagina-curva-boton').addEventListener('click', () => { if (pagina) cambiar({ aplanar: pagina.aplanar === false }); });
+  $('#pagina-dedos-boton').addEventListener('click', () => { if (pagina) cambiar({ dedos: pagina.dedos === false }); });
   // Libro abierto en una sola página: se separa en dos (la derecha queda después)
   $('#pagina-separar').addEventListener('click', () => conEspera(async () => {
     if (!pagina) return;

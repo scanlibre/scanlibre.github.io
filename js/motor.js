@@ -60,7 +60,7 @@ export async function procesar(imagen, opciones) {
     { tipo: 'procesar', imagen: { data: imagen.data, width: imagen.width, height: imagen.height }, opciones },
     [imagen.data.buffer]
   );
-  return { imagen: new ImageData(new Uint8ClampedArray(r.data.buffer, r.data.byteOffset, r.data.length), r.width, r.height), nitidez: r.nitidez, aplanada: r.aplanada };
+  return { imagen: new ImageData(new Uint8ClampedArray(r.data.buffer, r.data.byteOffset, r.data.length), r.width, r.height), nitidez: r.nitidez, aplanada: r.aplanada, sinDedos: r.sinDedos };
 }
 
 /**

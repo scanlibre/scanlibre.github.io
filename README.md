@@ -13,6 +13,7 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Aviso de foto borrosa:** ningún filtro arregla una foto movida o desenfocada, así que la app lo dice al momento y ofrece **Repetir foto**. Las páginas borrosas se marcan en el documento y se pueden **volver a tomar** sin perder su lugar.
 - **Enderezado real:** corrige la perspectiva y calcula la proporción verdadera de la hoja aunque la foto se haya tomado en ángulo.
 - **Modo libro:** una foto del libro abierto se vuelve dos páginas: la app busca el lomo (la franja sin letras y la sombra del doblez) y parte la hoja siguiendo la perspectiva. También con "Separar" en una página ya tomada.
+- **Quitar dedos:** los dedos que sostienen la hoja en los bordes se tapan con el color del papel (de piel clara a morena, también en sombra). Una hoja amarillenta o un dibujo en medio de la página no se tocan, y en cada página se puede deshacer.
 - **Páginas curvas de libros:** si la hoja no queda plana (cerca del lomo o con una esquina levantada), sigue los renglones de texto y los endereza. En una hoja plana no toca nada, y en cada página se puede deshacer.
 - **Esquinas a mano** con lupa; se ven sobre papel blanco y sobre fondos oscuros.
 - **Filtros:** Original, Mejorada (papel blanco sin sombras y sin saturar los colores), Dibujo (para lápiz y bocetos: se ven hasta los trazos más suaves), Gris y B/N (umbral local tipo Sauvola: no se come el texto suave ni deja manchas negras con la sombra del lomo de un libro).
@@ -36,6 +37,7 @@ La detección, los filtros, el PDF y el respaldo están escritos para esta app, 
 | Parte | Archivo | Qué hace |
 |---|---|---|
 | Detección | `js/imagen/deteccion.js` | Bordes (Canny) sobre brillo y saturación; los candidatos salen de grupos de bordes, zonas claras u oscuras (Otsu) y rectas largas (Hough, con el sentido del contraste). Cada lado se afina ajustando una recta y se califica por borde real y por contraste entre adentro y afuera. |
+| Dedos | `js/imagen/dedos.js` | Manchas con color de piel pegadas a un borde y con forma de dedo, más su sombra maciza; se tapan con el color del papel de alrededor. |
 | Libro | `js/imagen/libro.js` | Busca el lomo en el libro abierto enderezado y parte sus esquinas en dos hojas con la homografía. |
 | Páginas curvas | `js/imagen/aplanar.js` | Busca los renglones en franjas verticales, les ajusta una curva y corre cada columna para dejarlos rectos. |
 | Proporción | `js/imagen/geometria.js` | Homografía y proporción real de la hoja (método de Zhang y He). |
