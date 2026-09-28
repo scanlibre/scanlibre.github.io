@@ -5,7 +5,7 @@ import { $, el, aviso, confirmar, nombreArchivo, menu, pedirTexto, hoyCorto } fr
 import { dibujarMarcaDeAgua } from '../marcas.js';
 import { obtenerDocumento, guardarDocumento, obtenerPagina, moverPaginas, paginasAPapelera, recuperarPagina, DIAS_PAPELERA } from '../db.js';
 import { ir, volver } from '../rutas.js';
-import { reprocesar, esBorrosa, separarLibro, baseParaLuz, conLuz, lienzoConMarcas, nuevoDocumento } from '../paginas.js';
+import { reprocesar, esBorrosa, separarLibro, baseParaLuz, conLuz, lienzoConMarcas, nuevoDocumento, noEsRepetida } from '../paginas.js';
 import { nuevaSesion } from './camara.js';
 import { abrirFoto, canvasABlob, soltarCanvas } from '../fotos.js';
 import { FILTROS } from '../imagen/filtros.js';
@@ -55,6 +55,9 @@ function pintar() {
   const conDedos = pagina.dedos === false;
   $('#pagina-dedos').hidden = yaLista || (!pagina.sinDedos && !conDedos);
   $('#pagina-portada').hidden = pagina.modo !== 'portada';
+  const igualA = pagina.repetida && doc.paginas.includes(pagina.repetida) ? doc.paginas.indexOf(pagina.repetida) + 1 : 0;
+  $('#pagina-repetida').hidden = !igualA;
+  if (igualA) $('#pagina-repetida-texto').textContent = `Parece igual a la página ${igualA}.`;
   $('#pagina-dedos-texto').textContent = conDedos ? 'Dedos sin tapar.' : 'Se taparon los dedos de los bordes.';
   $('#pagina-dedos-boton').textContent = conDedos ? 'Tapar' : 'Deshacer';
   return imagen;
@@ -327,6 +330,13 @@ export function iniciar() {
   $('#pagina-luz-cancelar').addEventListener('click', () => cerrarLuz());
   $('#pagina-luz-listo').addEventListener('click', listoLuz);
   $('#pagina-mas').addEventListener('click', masOpciones);
+  $('#pagina-repetida-quitar').addEventListener('click', borrar);
+  $('#pagina-repetida-no').addEventListener('click', async () => {
+    if (!pagina) return;
+    await noEsRepetida(pagina.id);
+    pagina = await obtenerPagina(pagina.id);
+    pintar();
+  });
   $('#pagina-portada-boton').addEventListener('click', async () => {
     if (!pagina || trabajando) return;
     const id = doc.id;

@@ -13,6 +13,7 @@ import { dibujarMarcas, girarMarcas } from './marcas.js';
 import { hojaDeCedula } from './cedula.js';
 import { esPDF, abrirPDF } from './importar.js';
 import { dibujarPortada } from './portada.js';
+import { huella, esRepetida } from './imagen/repetidas.js';
 
 export const TODA_LA_FOTO = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }];
 
@@ -239,7 +240,7 @@ export function encolar(docId, trabajo) {
   avisar('cambio', { docId });
   cadena = cadena.then(async () => {
     try {
-      for (const pagina of [await trabajo()].flat()) await agregarPagina(docId, pagina);
+      for (const pagina of [await trabajo()].flat()) await agregarPaginaRevisada(docId, pagina);
     } catch (e) {
       console.error(e);
       avisar('error', { docId, error: e });
@@ -253,6 +254,64 @@ export function encolar(docId, trabajo) {
 }
 
 export const pendientesEnCola = docId => pendientes.get(docId) || 0;
+
+// ── Páginas repetidas ───────────────────────────────────────────────
+const huellas = new Map(); // id de la página → huella (se calcula una vez)
+const huellaDe = async p => {
+  if (huellas.has(p.id)) return huellas.get(p.id);
+  const bmp = await abrirFoto(p.miniatura);
+  const h = huella(aImageData(bmp));
+  bmp.close?.();
+  huellas.set(p.id, h);
+  return h;
+};
+// Las portadas y las páginas de un PDF pueden repetirse a propósito
+const comparable = p => p && !p.papelera && p.modo !== 'portada' && p.modo !== 'pdf' && !p.noRepetida;
+
+/**
+ * ¿La página es igual a una de las `anteriores` que tiene antes en el
+ * documento? Si sí, queda marcada (`repetida` = la otra) y se avisa.
+ * @returns el número de la página a la que se parece, o 0
+ */
+export async function revisarRepetida(docId, id, { anteriores = 3 } = {}) {
+  const doc = await obtenerDocumento(docId);
+  const i = doc?.paginas.indexOf(id) ?? -1;
+  const pagina = i > 0 ? await obtenerPagina(id) : null;
+  if (!comparable(pagina)) return 0;
+  const h = await huellaDe(pagina);
+  for (let k = i - 1; k >= Math.max(0, i - anteriores); k--) {
+    const otra = await obtenerPagina(doc.paginas[k]);
+    if (!comparable(otra) || !esRepetida(h, await huellaDe(otra))) continue;
+    await guardarPagina({ ...(await obtenerPagina(id)), repetida: otra.id });
+    avisar('repetida', { docId, id, n: i + 1, igualA: k + 1 });
+    return k + 1;
+  }
+  return 0;
+}
+
+/** Agrega la página al final del documento y revisa si repite una de las anteriores */
+export async function agregarPaginaRevisada(docId, pagina) {
+  await agregarPagina(docId, pagina);
+  try { await revisarRepetida(docId, pagina.id); } catch (e) { console.warn('Repetidas:', e); }
+}
+
+/** Busca páginas repetidas en todo el documento (cada una contra las 5 anteriores). @returns cuántas */
+export async function buscarRepetidas(docId) {
+  const doc = await obtenerDocumento(docId);
+  let n = 0;
+  for (const id of doc.paginas.slice(1)) {
+    const p = await obtenerPagina(id);
+    if (p?.repetida && doc.paginas.includes(p.repetida)) { n++; continue; }
+    if (await revisarRepetida(docId, id, { anteriores: 5 })) n++;
+  }
+  return n;
+}
+
+/** La página no es repetida: se quita el aviso y no se vuelve a marcar */
+export async function noEsRepetida(id) {
+  const p = await obtenerPagina(id);
+  if (p) await guardarPagina({ ...p, repetida: null, noRepetida: true });
+}
 /** ¿No queda ninguna foto armándose? (entonces se puede recargar la app sin perder nada) */
 export const colaVacia = () => pendientes.size === 0;
 

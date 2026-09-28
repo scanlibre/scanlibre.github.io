@@ -12,7 +12,7 @@ import { ajustes, cambiarAjuste, modoCamara } from '../ajustes.js';
 import { detectar, nitidez } from '../motor.js';
 import { aCanvas, aImageData, canvasABlob, normalizarFoto, soltarCanvas } from '../fotos.js';
 import { caraDeCedula } from '../cedula.js';
-import { buscarHoja, crearPagina, crearPaginasDeLibro, crearPaginaDeCedula, encolar, importarArchivos, nuevoDocumento, pendientesEnCola, fotoBorrosa, esBorrosa, TODA_LA_FOTO } from '../paginas.js';
+import { buscarHoja, crearPagina, crearPaginasDeLibro, crearPaginaDeCedula, encolar, agregarPaginaRevisada, eventosPaginas, importarArchivos, nuevoDocumento, pendientesEnCola, fotoBorrosa, esBorrosa, TODA_LA_FOTO } from '../paginas.js';
 import { agregarPagina, reemplazarPagina } from '../db.js';
 import { elegirArchivos } from '../archivos.js';
 import { abrirRecorte } from './recorte.js';
@@ -502,7 +502,7 @@ async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, 
         // Las dos páginas del libro (o una, si no se encuentra el lomo)
         const paginas = await crearPaginasDeLibro(foto, esq);
         for (const p of paginas) {
-          await agregarPagina(docId, p);
+          await agregarPaginaRevisada(docId, p);
           contarPagina(URL.createObjectURL(p.miniatura));
         }
         if (paginas.length === 1) aviso('No encontré el lomo del libro: quedó como una sola página.', 'info', 5000);
@@ -510,7 +510,7 @@ async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, 
       }
       const miniatura = await miniaturaDe(foto.canvas); // antes: crearPagina suelta el canvas
       try {
-        await agregarPagina(docId, await crearPagina(foto, esq, opciones));
+        await agregarPaginaRevisada(docId, await crearPagina(foto, esq, opciones));
       } catch (e) {
         URL.revokeObjectURL(miniatura);
         throw e;
@@ -641,6 +641,10 @@ export function iniciar() {
     void anillo.offsetWidth;
     anillo.hidden = false;
     enfocar(x, y);
+  });
+  // En ráfaga es fácil tomar la misma página dos veces: se avisa al momento
+  eventosPaginas.addEventListener('repetida', e => {
+    if (activa && sesion?.docId === e.detail.docId) aviso(`La página ${e.detail.n} parece igual a la ${e.detail.igualA}: revísala al terminar.`, 'info', 4500);
   });
   $('#camara-disparar').addEventListener('click', () => disparar());
   $('#camara-cerrar').addEventListener('click', terminar);

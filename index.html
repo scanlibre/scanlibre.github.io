@@ -183,6 +183,11 @@
     </header>
     <div class="contenido" id="doc-contenido">
       <p id="doc-estado" class="doc-estado"></p>
+      <div id="doc-repetidas" class="sin-leer repetidas" role="status" hidden>
+        <p id="doc-repetidas-texto"></p>
+        <button class="boton boton-secundario" id="doc-repetidas-quitar">Quitar</button>
+        <button class="boton boton-fantasma" id="doc-repetidas-no">No es repetida</button>
+      </div>
       <ol id="doc-paginas" class="rejilla" aria-label="Páginas"></ol>
       <p id="doc-consejo" class="doc-consejo" hidden>Mantén presionada una página para arrastrarla a otro lugar o para elegir varias.</p>
     </div>
@@ -213,6 +218,11 @@
     <div id="pagina-curva" class="curva-aviso" role="status" hidden>
       <p id="pagina-curva-texto"></p>
       <button class="boton boton-fantasma" id="pagina-curva-boton"></button>
+    </div>
+    <div id="pagina-repetida" class="curva-aviso aviso-repetida" role="status" hidden>
+      <p id="pagina-repetida-texto"></p>
+      <button class="boton boton-fantasma" id="pagina-repetida-quitar">Quitar</button>
+      <button class="boton boton-fantasma" id="pagina-repetida-no">No es</button>
     </div>
     <div id="pagina-portada" class="curva-aviso" role="status" hidden>
       <p>Portada del trabajo.</p>

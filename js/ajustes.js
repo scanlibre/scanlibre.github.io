@@ -16,6 +16,7 @@ const FABRICA = {
   marcaDeAgua: '',        // el último texto de marca de agua que se usó
   marcaConFecha: true,    // la marca de agua lleva la fecha de hoy
   ocrIdioma: 'spa',
+  vozVelocidad: 1,        // velocidad de la voz al escuchar el texto
   carpeta: null           // carpeta elegida en el inicio: lo que se escanea se guarda ahí
 };
 

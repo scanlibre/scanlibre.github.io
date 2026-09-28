@@ -25,7 +25,7 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Filtros:** Original, Mejorada (papel blanco sin sombras y sin saturar los colores), Dibujo (para lápiz y bocetos: se ven hasta los trazos más suaves), Gris, B/N (umbral local tipo Sauvola: no se come el texto suave ni deja manchas negras con la sombra del lomo de un libro) y Pizarra.
 - **Texto (OCR), gratis y sin internet:** copiar o compartir el texto de una página o de todo el documento, en español, inglés o los dos. Y **PDF con texto buscable**: se ve igual, pero se pueden buscar y copiar las palabras. Antes de leer, la página se prepara (papel parejo, más contraste y nitidez): así lee también la letra chica de un libro.
 - **El texto a Word (.docx)** para seguir trabajándolo, con los renglones de cada párrafo juntados y las listas aparte.
-- **Escuchar el texto** con la voz del teléfono, frase por frase, con pausa.
+- **Escuchar el texto** con la voz del teléfono, frase por frase, con pausa. Mientras lee se ve el texto con **la frase resaltada** (y la palabra, en los teléfonos que avisan por dónde van); tocar una frase lee desde ahí, y la velocidad va de 0,8× a 1,5×.
 - **Fotos a resolución completa** (hasta 4000 px, 12 MP): la letra chica conserva el detalle.
 - **Buscar en todos los documentos:** en los nombres y en el texto de cada página, sin importar tildes ni mayúsculas. Muestra la página y el pedazo donde está la palabra; las páginas que faltan se leen con un toque.
 - **Carpetas por clase:** lo que escaneas dentro de una carpeta se guarda ahí y se nombra solo («Cálculo – 27 sept»). Los documentos se pueden mover de carpeta; borrar una carpeta no borra sus documentos.
@@ -37,6 +37,7 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **PDF** en tamaño carta, A4 o con la forma de la foto, y en tres calidades. La calidad *Liviana* sirve para subir a plataformas con límite de tamaño, y con **"Que pese menos de…"** (1, 2, 5 o 10 MB) la app busca sola la mejor calidad que quepa.
 - **2 o 4 páginas por hoja** para imprimir más barato: las páginas paradas van de lado a lado en una hoja acostada (2) o en 2 × 2 (4), con una raya fina para recortarlas y con el texto buscable de cada una. Las páginas en B/N van a 1 bit por píxel: nítidas y livianas (unos 50 KB por página).
 - **Marca de agua** en el PDF o en la imagen de una página: un texto cruzado y repetido («Solo para trámite en el banco · 28/09/2026») para que una copia, como la de tu cédula, solo sirva para lo que tú digas. Va dentro de la imagen: no se puede quitar del PDF.
+- **Aviso de páginas repetidas:** en ráfaga es fácil tomar la misma página dos veces. Cada página nueva se compara con las anteriores por el dibujo que forman sus palabras (dos páginas del mismo libro no se confunden) y, si repite una, se marca *Repetida* con **Quitar** o **No es repetida**. También se puede buscar en todo el documento.
 - **Papelera:** lo que eliminas (documentos o páginas) queda 30 días y se recupera en su mismo lugar; al borrar, el aviso trae **Deshacer**. Después de 30 días se borra solo.
 - **PDF con contraseña, gratis:** cifrado AES-256 estándar (el que abren Adobe, Chrome y los visores de Android e iPhone). La contraseña no se guarda en ningún lado.
 - **Compartir** directo a WhatsApp, Drive o Classroom, o descargar el PDF.
@@ -53,6 +54,7 @@ La detección, los filtros, el PDF y el respaldo están escritos para esta app, 
 | Dedos | `js/imagen/dedos.js` | Manchas con color de piel pegadas a un borde y con forma de dedo, más su sombra maciza; se tapan con el color del papel de alrededor. |
 | Marcas | `js/marcas.js` | Resaltador, lápiz, notas y firma en fracciones de la página: se dibujan a cualquier tamaño (el resaltador "multiplica", así las letras de abajo siguen negras). El trazo casi derecho se endereza por mínimos cuadrados y se ajusta al renglón buscando las filas con tinta y las palabras bajo él. Al girar la página, giran con ella. |
 | Cédula | `js/cedula.js` | Cada cara se endereza y se lleva a la medida ID-1 de las tarjetas (85,6 × 54 mm); las dos van centradas en una hoja carta o A4 a 300 ppp, con una raya fina para recortarlas. |
+| Repetidas | `js/imagen/repetidas.js` | Huella de 72 × 96 en gris sin lo que es parejo a lo largo del renglón (queda el dibujo de las palabras), sin el borde y con lo muy fuerte recortado; correlación corriendo ±3 píxeles. En 18 páginas reales: la misma página da 0,67 a 0,96 y páginas distintas, hasta 0,26. |
 | Libro | `js/imagen/libro.js` | Busca el lomo en el libro abierto enderezado y parte sus esquinas en dos hojas con la homografía. |
 | Páginas curvas | `js/imagen/aplanar.js` | Busca los renglones en franjas verticales, les ajusta una curva y corre cada columna para dejarlos rectos. |
 | Proporción | `js/imagen/geometria.js` | Homografía y proporción real de la hoja (método de Zhang y He). |

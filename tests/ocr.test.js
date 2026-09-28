@@ -130,6 +130,49 @@ describe('Lector de texto (OCR)', () => {
     await page.waitForFunction(n => window.calladas > n, antes);
   });
 
+  it('mientras se escucha, se resalta la frase y la palabra; tocar una frase lee desde ahí; con velocidad', async () => {
+    // Voz simulada que avisa cada palabra (como Chrome) y termina cuando se le dice
+    const page = await env.pagina({ antes: () => {
+      window.dichas = []; window.actual = null;
+      const voz = {
+        speak(u) { window.dichas.push({ texto: u.text, rate: u.rate }); window.actual = u; },
+        cancel() { window.actual = null; }, getVoices: () => [], pause() {}, resume() {}
+      };
+      window.decirPalabra = n => { const u = window.actual; const m = [...u.text.matchAll(/\S+/g)][n]; u.onboundary?.({ name: 'word', charIndex: m.index, charLength: m[0].length }); };
+      window.terminarFrase = () => { const u = window.actual; window.actual = null; u?.onend?.(); };
+      Object.defineProperty(window, 'speechSynthesis', { value: voz, configurable: true });
+    } });
+    await importarFoto(page, hoja2);
+    await page.click('#doc-paginas .miniatura');
+    await page.click('#pagina-texto');
+    await esperarTexto(page);
+    await page.click('dialog .boton:has-text("Escuchar")');
+    await page.waitForSelector('dialog .texto-escucha:not([hidden])');
+    assert.equal(await page.isVisible('dialog .texto-leido'), false, 'mientras se escucha se ve el texto con lo que se dice');
+    assert.match(await page.textContent('dialog .frase.actual'), /Historia de Honduras/);
+    // La segunda palabra de la frase queda marcada
+    await page.evaluate(() => window.decirPalabra(1));
+    assert.equal(await page.textContent('dialog .frase.actual mark'), 'de');
+    // Tocar la otra frase la lee desde ahí
+    await page.click('dialog .frase:has-text("1821")');
+    await page.waitForFunction(() => /1821/.test(window.actual?.text || ''));
+    assert.match(await page.textContent('dialog .frase.actual'), /independencia/);
+    // Más rápido: la frase vuelve a empezar a 1,5
+    await page.click('dialog .velocidades [data-velocidad="1.5"]');
+    await page.waitForFunction(() => window.actual?.rate === 1.5);
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('scanlibre_ajustes')).vozVelocidad), 1.5);
+    // Al terminar vuelve el texto para editar
+    await page.evaluate(() => window.terminarFrase());
+    await page.waitForSelector('dialog .texto-leido:not([hidden])');
+    assert.equal(await page.isVisible('dialog .texto-escucha'), false);
+    // Y Detener también lo devuelve
+    await page.click('dialog .boton:has-text("Escuchar")');
+    await page.waitForSelector('dialog .texto-escucha:not([hidden])');
+    await page.click('dialog .boton:has-text("Detener")');
+    await page.waitForSelector('dialog .texto-leido:not([hidden])');
+    assert.deepEqual(page.errores, []);
+  });
+
   it('el texto leído viaja en el respaldo', async () => {
     const page = await env.pagina();
     await importarFoto(page, hoja2);

@@ -325,6 +325,15 @@ mark { background: var(--marca-suave); color: var(--texto); border-radius: 3px; 
 }
 .curva-aviso p { flex: 1; margin: 0; font-size: 0.88rem; }
 .curva-aviso .boton { min-height: 38px; font-size: 0.9rem; color: var(--marca-fuerte); }
+.miniatura-avisos { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.miniatura-avisos .miniatura-borrosa { position: static; }
+.miniatura-repetida { padding: 3px 8px; border-radius: 999px; background: #fb923c; color: #2a1200; font-size: 0.75rem; font-weight: 800; }
+.repetidas { margin: 0 0 12px; background: #ffedd5; color: #4a2300; }
+.repetidas .boton-fantasma { color: #7c2d12; }
+@media (prefers-color-scheme: dark) { .repetidas { background: #3b1d08; color: #fed7aa; } .repetidas .boton-fantasma { color: #fdba74; } }
+.aviso-repetida { background: #ffedd5; color: #7c2d12; }
+.aviso-repetida .boton { color: #9a3412; }
+@media (prefers-color-scheme: dark) { .aviso-repetida { background: #3b1d08; color: #fed7aa; } .aviso-repetida .boton { color: #fdba74; } }
 .miniatura-borrosa {
   position: absolute; right: 8px; top: 8px;
   padding: 3px 8px; border-radius: 999px;
@@ -597,6 +606,15 @@ mark { background: var(--marca-suave); color: var(--texto); border-radius: 3px; 
   min-height: 220px; max-height: 45vh; padding: 12px 14px; resize: vertical;
   font-size: 0.98rem; line-height: 1.5; white-space: pre-wrap;
 }
+.texto-escucha {
+  position: relative; min-height: 220px; max-height: 45vh; overflow-y: auto; margin-top: 8px; padding: 12px 14px;
+  border: 1.5px solid var(--borde); border-radius: 12px; background: var(--fondo);
+  font-size: 1.02rem; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.texto-escucha .frase { cursor: pointer; border-radius: 4px; transition: background-color 0.15s; }
+.texto-escucha .frase.actual { background: var(--marca-suave); }
+.texto-escucha mark { background: #ffe84a; color: #111; padding: 0 1px; }
+.velocidades { margin-top: 8px; }
 .acerca p { color: var(--texto-2); margin: 8px 0; }
 .acerca ul { margin: 8px 0; padding-left: 20px; color: var(--texto-2); }
 .acerca .diagnostico, .acerca .acerca-version { font-size: 0.8rem; }

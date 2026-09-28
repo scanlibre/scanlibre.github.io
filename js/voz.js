@@ -46,10 +46,12 @@ function elegirVoz(ingles) {
 
 /**
  * Lector con pausa.
- * @param alCambiar ({ activo, i, total, frase, fin, error }) para pintar los botones y en qué frase va
+ * @param alCambiar ({ activo, i, total, frase, palabra, fin, error }) para pintar los botones y por dónde va:
+ *   `frase` y `palabra` traen { inicio, fin } en el texto (la palabra, si el teléfono avisa por dónde va)
  */
 export function crearLector({ alCambiar } = {}) {
-  let lista = [], i = 0, activo = false, enPausa = false, turno = 0, ingles = false;
+  let lista = [], i = 0, activo = false, enPausa = false, turno = 0, ingles = false, velocidad = 1;
+  let original = '', paraDecir = t => t;
   const sintesis = () => window.speechSynthesis;
   const avisar = x => alCambiar?.({ activo, i, total: lista.length, ...x });
 
@@ -57,8 +59,10 @@ export function crearLector({ alCambiar } = {}) {
     const este = turno;
     if (!activo) return;
     if (i >= lista.length) { activo = false; enPausa = false; i = 0; return avisar({ fin: true }); }
-    const u = new SpeechSynthesisUtterance(lista[i].texto);
+    const frase = lista[i], dicho = paraDecir(frase.texto);
+    const u = new SpeechSynthesisUtterance(dicho);
     u.lang = ingles ? 'en-US' : 'es-419';
+    u.rate = velocidad;
     const voz = elegirVoz(ingles);
     if (voz) try { u.voice = voz; } catch (e) {}
     u.onend = () => { if (este === turno) { i++; decir(); } };
@@ -67,21 +71,51 @@ export function crearLector({ alCambiar } = {}) {
       activo = false;
       avisar({ error: e.error || 'error' });
     };
-    avisar({ frase: lista[i] });
+    // La palabra que va diciendo: se busca en el texto, de adelante hacia atrás
+    let desde = frase.inicio;
+    u.onboundary = e => {
+      if (este !== turno || (e.name && e.name !== 'word')) return;
+      const palabra = (dicho.slice(e.charIndex).match(/^[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/u) || [])[0];
+      if (!palabra) return;
+      const k = original.indexOf(palabra, desde);
+      if (k < 0 || k >= frase.fin) return;
+      desde = k + palabra.length;
+      avisar({ frase, palabra: { inicio: k, fin: k + palabra.length } });
+    };
+    avisar({ frase });
     sintesis().speak(u);
   }
 
   return {
-    empezar(texto, { enIngles = false } = {}) {
+    /**
+     * @param decir   cómo se dice cada frase (por ejemplo, sin las viñetas); el resaltado sigue al texto original
+     * @param desde   la frase por la que se empieza
+     */
+    empezar(texto, { enIngles = false, decir: arreglar = t => t, velocidad: v = velocidad, desde = 0 } = {}) {
       turno++; sintesis().cancel();
-      lista = frases(texto); i = 0; activo = true; enPausa = false; ingles = enIngles;
+      original = texto; paraDecir = arreglar; velocidad = v;
+      lista = frases(texto); i = Math.max(0, Math.min(desde, lista.length - 1)); activo = true; enPausa = false; ingles = enIngles;
       decir();
     },
     // Pausa: se corta y se recuerda la frase; "seguir" la empieza de nuevo
-    pausar() { turno++; activo = false; enPausa = true; sintesis().cancel(); avisar({ pausado: true }); },
+    pausar() { turno++; activo = false; enPausa = true; sintesis().cancel(); avisar({ pausado: true, frase: lista[i] }); },
     seguir() { turno++; activo = true; enPausa = false; decir(); },
+    /** Salta a la frase k y la lee desde ahí */
+    irA(k) {
+      if (!lista.length) return;
+      turno++; sintesis().cancel();
+      i = Math.max(0, Math.min(k, lista.length - 1)); activo = true; enPausa = false;
+      decir();
+    },
+    /** Otra velocidad (0,5 a 2): si está leyendo, sigue con la frase de nuevo a esa velocidad */
+    cambiarVelocidad(v) {
+      velocidad = v;
+      if (activo) { turno++; sintesis().cancel(); decir(); }
+    },
     detener() { turno++; activo = false; enPausa = false; i = 0; sintesis().cancel(); },
     get activo() { return activo; },
-    get pausado() { return enPausa; }
+    get pausado() { return enPausa; },
+    get frases() { return lista; },
+    get velocidad() { return velocidad; }
   };
 }

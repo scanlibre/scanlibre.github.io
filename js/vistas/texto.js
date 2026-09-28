@@ -43,8 +43,9 @@ async function aWord(nombre, paginas) {
   }
 }
 
-/** Lo que se escucha: sin las rayas de "— Página 2 —" ni las viñetas */
-const paraVoz = t => t.replace(/^— Página (\d+) —$/gm, 'Página $1.').replace(/^• (\([a-z]+\) )?/gm, '');
+/** Lo que se dice de cada frase: sin las viñetas ni el color de lo resaltado */
+const paraVoz = t => t.replace(/•\s*(\([a-z]+\)\s*)?/g, '').trim();
+const VELOCIDADES = [[0.8, '0,8×'], [1, '1×'], [1.25, '1,25×'], [1.5, '1,5×']];
 
 /**
  * @param paginas las páginas a leer, en orden
@@ -69,19 +70,69 @@ export function mostrarTexto(paginas, { titulo, nombre = titulo, numeros = null,
     } }, icono('compartir'), 'Compartir');
     // Escuchar: Escuchar → Pausa → Seguir…
     const etiqueta = el('span', { text: 'Escuchar' });
+    // Mientras se escucha: el texto con la frase que va (y la palabra, si el teléfono avisa) resaltada.
+    // Tocar una frase la lee desde ahí.
+    const lectura = el('div', { class: 'texto-escucha', hidden: true });
+    let actual = null;
+    const armarLectura = () => {
+      const t = area.value, nodos = [];
+      let pos = 0;
+      lector.frases.forEach((f, k) => {
+        if (f.inicio > pos) nodos.push(document.createTextNode(t.slice(pos, f.inicio)));
+        nodos.push(el('span', { class: 'frase', 'data-i': k, onclick: () => lector.irA(k) }, t.slice(f.inicio, f.fin)));
+        pos = f.fin;
+      });
+      if (pos < t.length) nodos.push(document.createTextNode(t.slice(pos)));
+      lectura.replaceChildren(...nodos);
+      actual = null;
+    };
+    const resaltar = (k, frase, palabra) => {
+      const span = lectura.querySelector(`[data-i="${k}"]`);
+      if (!span) return;
+      if (actual && actual !== span) { actual.classList.remove('actual'); actual.textContent = actual.textContent; }
+      actual = span;
+      span.classList.add('actual');
+      const t = area.value;
+      if (palabra) span.replaceChildren(t.slice(frase.inicio, palabra.inicio), el('mark', { text: t.slice(palabra.inicio, palabra.fin) }), t.slice(palabra.fin, frase.fin));
+      else span.textContent = t.slice(frase.inicio, frase.fin);
+      // Que se vea por dónde va
+      const arriba = span.offsetTop, abajo = arriba + span.offsetHeight;
+      if (arriba < lectura.scrollTop || abajo > lectura.scrollTop + lectura.clientHeight) lectura.scrollTop = Math.max(0, arriba - lectura.clientHeight / 3);
+    };
+    const escuchando = si => {
+      lectura.hidden = !si; area.hidden = si;
+      velocidades.hidden = !si; botonDetener.hidden = !si;
+    };
+    const velocidades = el('div', { class: 'idiomas velocidades', role: 'group', 'aria-label': 'Velocidad de la voz', hidden: true },
+      VELOCIDADES.map(([v, texto]) => el('button', { class: 'filtro', 'data-velocidad': v, 'aria-pressed': String(Number(v) === (ajustes().vozVelocidad || 1)), onclick: e => {
+        cambiarAjuste('vozVelocidad', Number(v));
+        for (const b of velocidades.children) b.setAttribute('aria-pressed', String(b === e.currentTarget));
+        lector.cambiarVelocidad(Number(v));
+      } }, texto)));
     const botonEscuchar = puedeHablar() && el('button', { class: 'boton boton-secundario', disabled: true, onclick: () => {
       if (lector.activo) lector.pausar();
       else if (lector.pausado) lector.seguir();
-      else lector.empezar(paraVoz(area.value), { enIngles: idioma === 'eng' });
+      else {
+        lector.empezar(area.value, { enIngles: idioma === 'eng', decir: paraVoz, velocidad: ajustes().vozVelocidad || 1 });
+        armarLectura();
+        escuchando(true);
+        if (lector.frases.length) resaltar(0, lector.frases[0]);
+      }
     } }, icono('voz'), etiqueta);
-    if (botonEscuchar) lector = crearLector({ alCambiar: ({ activo, i, total, frase, fin, error }) => {
+    const botonDetener = el('button', { class: 'boton boton-fantasma', hidden: true, onclick: () => {
+      lector.detener();
+      etiqueta.textContent = 'Escuchar';
+      botonEscuchar.setAttribute('aria-pressed', 'false');
+      estado.textContent = '';
+      escuchando(false);
+    } }, 'Detener');
+    if (botonEscuchar) lector = crearLector({ alCambiar: ({ activo, i, total, frase, palabra, fin, error }) => {
       etiqueta.textContent = activo ? 'Pausa' : lector.pausado ? 'Seguir' : 'Escuchar';
       botonEscuchar.setAttribute('aria-pressed', String(activo));
-      // Que se vea por dónde va: se desliza el texto hasta la frase
-      if (frase) area.scrollTop = Math.max(0, frase.inicio / Math.max(1, area.value.length) * area.scrollHeight - area.clientHeight / 3);
-      if (activo) estado.textContent = `Leyendo en voz alta: frase ${i + 1} de ${total}.`;
-      else if (fin) estado.textContent = 'Listo: se leyó todo el texto.';
-      else if (error) estado.textContent = 'Este teléfono no pudo leer en voz alta. Revisa que tenga instalada una voz en español (Ajustes → Texto a voz).';
+      if (frase) resaltar(i, frase, palabra);
+      if (activo) estado.textContent = `Leyendo en voz alta: frase ${i + 1} de ${total}. Toca una frase para leer desde ahí.`;
+      else if (fin) { estado.textContent = 'Listo: se leyó todo el texto.'; escuchando(false); }
+      else if (error) { estado.textContent = 'Este teléfono no pudo leer en voz alta. Revisa que tenga instalada una voz en español (Ajustes → Texto a voz).'; escuchando(false); }
     } });
     const botonWord = el('button', { class: 'boton boton-secundario', disabled: true, onclick: () =>
       aWord(nombre, conColores && area.value === original ? conColores : paginasDelTexto(area.value, varias)) }, icono('word'), 'Word');
@@ -100,6 +151,7 @@ export function mostrarTexto(paginas, { titulo, nombre = titulo, numeros = null,
       const este = ++turno;
       area.hidden = true;
       lector?.detener();
+      if (lector) { escuchando(false); area.hidden = true; }
       for (const b of [botonCopiar, botonCompartir, botonEscuchar, botonWord]) if (b) b.disabled = true;
       progreso.hidden = false;
       barra.style.width = '0%';
@@ -150,8 +202,8 @@ export function mostrarTexto(paginas, { titulo, nombre = titulo, numeros = null,
     return [
       el('h2', { class: 'hoja-titulo', text: titulo }),
       el('div', { class: 'idiomas', role: 'group', 'aria-label': 'Idioma del texto' }, chips),
-      estado, progreso, area,
-      el('div', { class: 'hoja-botones' }, botonEscuchar, botonWord),
+      estado, progreso, area, lectura, velocidades,
+      el('div', { class: 'hoja-botones' }, botonEscuchar, botonDetener, botonWord),
       el('div', { class: 'hoja-botones' }, botonCompartir, botonCopiar)
     ];
   });

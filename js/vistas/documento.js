@@ -6,7 +6,7 @@
 import { $, el, icono, aviso, confirmar, pedirTexto, menu, hoja, paginasTexto, fechaCorta, tamanoLegible, nombreArchivo, nuevoId, pedirClaveDePDF, hoyCorto } from '../util.js';
 import { obtenerDocumento, guardarDocumento, paginasDe, borrarDocumento, listarCarpetas, guardarCarpeta, listarDocumentos, moverPaginas, documentoAPapelera, recuperarDocumento, paginasAPapelera, recuperarPagina, DIAS_PAPELERA } from '../db.js';
 import { ir, volver } from '../rutas.js';
-import { eventosPaginas, pendientesEnCola, importarArchivos, textoDePagina, esBorrosa, reprocesar, nuevoDocumento } from '../paginas.js';
+import { eventosPaginas, pendientesEnCola, importarArchivos, textoDePagina, esBorrosa, reprocesar, nuevoDocumento, buscarRepetidas, noEsRepetida } from '../paginas.js';
 import { FILTROS } from '../imagen/filtros.js';
 import { textoResaltado } from '../marcas.js';
 import { mostrarTexto } from './texto.js';
@@ -29,11 +29,13 @@ const ruta = (...partes) => ['doc', encodeURIComponent(docId), ...partes].join('
 export async function mostrar({ doc }) {
   docId = doc;
   eventosPaginas.addEventListener('cambio', alCambiar);
+  eventosPaginas.addEventListener('repetida', alCambiar);
   await pintar();
 }
 
 export function ocultar() {
   eventosPaginas.removeEventListener('cambio', alCambiar);
+  eventosPaginas.removeEventListener('repetida', alCambiar);
   cancelarAgarre();
   seleccion = null;
   pintarSeleccion();
@@ -61,13 +63,18 @@ async function pintar() {
   soltarUrls();
   $('#doc-nombre').textContent = doc.nombre;
   document.title = doc.nombre + ' · ScanLibre';
+  // Repetida: se parece a otra que sigue en el documento
+  const repetidaDe = p => p.repetida && doc.paginas.includes(p.repetida) ? doc.paginas.indexOf(p.repetida) + 1 : 0;
+  pintarRepetidas(paginas.map((p, i) => ({ id: p.id, n: i + 1, de: repetidaDe(p) })).filter(r => r.de));
   const items = paginas.map((p, i) => {
     const u = URL.createObjectURL(p.miniatura);
     urls.push(u);
     return el('li', { 'data-id': p.id },
-      el('button', { class: 'miniatura', 'data-id': p.id, 'aria-label': `Página ${i + 1}${esBorrosa(p) ? ' (borrosa)' : ''}`, onclick: () => tocarPagina(p.id) },
+      el('button', { class: 'miniatura', 'data-id': p.id, 'aria-label': `Página ${i + 1}${esBorrosa(p) ? ' (borrosa)' : ''}${repetidaDe(p) ? ` (parece igual a la ${repetidaDe(p)})` : ''}`, onclick: () => tocarPagina(p.id) },
         el('img', { src: u, alt: '', draggable: 'false' }),
-        esBorrosa(p) && el('span', { class: 'miniatura-borrosa', text: 'Borrosa' }),
+        (esBorrosa(p) || repetidaDe(p)) && el('span', { class: 'miniatura-avisos' },
+          esBorrosa(p) && el('span', { class: 'miniatura-borrosa', text: 'Borrosa' }),
+          repetidaDe(p) && el('span', { class: 'miniatura-repetida', text: 'Repetida' })),
         el('span', { class: 'miniatura-marca', 'aria-hidden': 'true' }, icono('listo')),
         el('span', { class: 'miniatura-numero', text: String(i + 1) })));
   });
@@ -86,6 +93,41 @@ async function pintar() {
   if (pendientes) estado += ` · procesando ${pendientes === 1 ? '1 foto' : pendientes + ' fotos'}…`;
   if (!trabajando) $('#doc-estado').textContent = estado;
   $('#doc-pdf').disabled = paginas.length === 0 || pendientes > 0;
+}
+
+// ── Páginas repetidas ───────────────────────────────────────────────
+let repetidas = [];
+function pintarRepetidas(lista) {
+  repetidas = lista;
+  $('#doc-repetidas').hidden = !lista.length;
+  if (!lista.length) return;
+  const [r] = lista;
+  $('#doc-repetidas-texto').textContent = lista.length === 1
+    ? `La página ${r.n} parece igual a la ${r.de}.`
+    : `${lista.length} páginas parecen repetidas: ${lista.map(x => x.n).join(', ')}.`;
+  $('#doc-repetidas-quitar').textContent = lista.length === 1 ? `Quitar la ${r.n}` : 'Elegirlas';
+  $('#doc-repetidas-no').textContent = lista.length === 1 ? 'No es repetida' : 'No son repetidas';
+}
+
+async function quitarRepetidas() {
+  if (repetidas.length !== 1) {
+    // Varias: quedan elegidas, para revisarlas y eliminarlas de una vez
+    entrarSeleccion();
+    for (const r of repetidas) seleccion.add(r.id);
+    return pintarSeleccion();
+  }
+  const [r] = repetidas, este = docId;
+  await paginasAPapelera(docId, [r.id]);
+  aviso(`Se quitó la página ${r.n}.`, 'info', 6000, { accion: { texto: 'Deshacer', alTocar: async () => {
+    await recuperarPagina(r.id);
+    if (docId === este) pintar();
+  } } });
+  pintar();
+}
+
+async function noSonRepetidas() {
+  for (const r of repetidas) await noEsRepetida(r.id);
+  pintar();
 }
 
 function tocarPagina(id) {
@@ -448,6 +490,7 @@ async function masOpciones() {
     { valor: 'resaltado', texto: 'Lo resaltado (para estudiar)', icono: 'resaltador' },
     { valor: 'portada', texto: tienePortada ? 'Cambiar la portada' : 'Portada del trabajo', icono: 'portada' },
     { valor: 'elegir', texto: 'Elegir páginas (girar, pasar a otro documento…)', icono: 'listo' },
+    { valor: 'repetidas', texto: 'Buscar páginas repetidas', icono: 'buscar' },
     { valor: 'unir', texto: 'Unir con otro documento', icono: 'mas' },
     { valor: 'renombrar', texto: 'Cambiar el nombre', icono: 'editar' },
     { valor: 'mover', texto: 'Mover a una carpeta', icono: 'carpeta' },
@@ -456,6 +499,12 @@ async function masOpciones() {
   if (opcion === 'mover') return moverACarpeta();
   if (opcion === 'elegir') return entrarSeleccion();
   if (opcion === 'unir') return unirCon();
+  if (opcion === 'repetidas') {
+    aviso('Comparando las páginas…');
+    const n = await buscarRepetidas(docId);
+    aviso(n ? (n === 1 ? 'Encontré 1 página repetida.' : `Encontré ${n} páginas repetidas.`) : 'No hay páginas repetidas.', n ? 'info' : 'exito');
+    return pintar();
+  }
   if (opcion === 'portada') { if (await editarPortada(docId)) pintar(); return; }
   if (opcion === 'resaltado') return loResaltado();
   if (opcion === 'texto') {
@@ -654,6 +703,8 @@ export function iniciar() {
   $('#doc-pdf').addEventListener('click', () => crearPDF());
   // Elegir varias
   $('#doc-seleccion-cerrar').addEventListener('click', salirSeleccion);
+  $('#doc-repetidas-quitar').addEventListener('click', quitarRepetidas);
+  $('#doc-repetidas-no').addEventListener('click', noSonRepetidas);
   $('#doc-seleccion-todas').addEventListener('click', () => {
     const todas = [...$('#doc-paginas').querySelectorAll('.miniatura[data-id]')].map(b => b.dataset.id);
     seleccion = new Set(seleccion?.size === todas.length ? [] : todas);
