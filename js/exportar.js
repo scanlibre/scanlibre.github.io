@@ -4,6 +4,7 @@
 import { crearPDF, crearPDFConContrasena, aBits } from './pdf.js';
 import { abrirFoto, aCanvas, canvasABlob } from './fotos.js';
 import { dibujarMarcas, dibujarMarcaDeAgua } from './marcas.js';
+import { fotosEnWorker, letrasEnWorker, paginaPDFEnWorker } from './motor.js';
 
 export const CALIDADES = {
   liviana: { texto: 'Liviana', detalle: 'Para subir a plataformas', maxLado: 1650, jpeg: 0.62 },
@@ -22,15 +23,18 @@ async function comprimir(bytes) {
   return new Uint8Array(await new Response(flujo).arrayBuffer());
 }
 
-/** Las páginas listas para el PDF (imagen y texto) con esa resolución y calidad de JPEG */
-async function partesDe(paginas, { maxLado, jpeg }, conTexto, alAvanzar, marcaDeAgua = '') {
-  const partes = [];
-  for (let i = 0; i < paginas.length; i++) {
-    alAvanzar?.(i, paginas.length);
-    const p = paginas[i];
-    const bmp = await abrirFoto(p.procesada);
-    const c = aCanvas(bmp, maxLado);
-    bmp.close?.();
+/** Deja que la pantalla se dibuje (el avance) antes de seguir; en segundo plano no espera al cuadro */
+const respirar = () => new Promise(r => {
+  const reloj = setTimeout(r, 60);
+  requestAnimationFrame(() => { clearTimeout(reloj); setTimeout(r, 0); });
+});
+
+/** Una página lista para el PDF, armada aquí en la página (cuando el worker no puede) */
+async function parteEnLaPagina(p, { maxLado, jpeg }, marcaDeAgua) {
+  const bmp = await abrirFoto(p.procesada);
+  const c = aCanvas(bmp, maxLado);
+  bmp.close?.();
+  try {
     // Resaltador, notas y firma encima de la página (con color: la página va en JPEG aunque sea B/N)
     const conMarcas = p.marcas?.length > 0 || !!marcaDeAgua;
     if (p.marcas?.length) dibujarMarcas(c.getContext('2d'), p.marcas, c.width, c.height);
@@ -38,16 +42,41 @@ async function partesDe(paginas, { maxLado, jpeg }, conTexto, alAvanzar, marcaDe
     if (marcaDeAgua) dibujarMarcaDeAgua(c.getContext('2d'), marcaDeAgua, c.width, c.height);
     if (p.filtro === 'bn' && !conMarcas && typeof CompressionStream !== 'undefined') {
       const img = c.getContext('2d').getImageData(0, 0, c.width, c.height);
-      partes.push({ tipo: 'bits', bytes: await comprimir(aBits(img)), ancho: c.width, alto: c.height });
-    } else {
-      // Una portada es solo letras: siempre con buena calidad
-      const b = await canvasABlob(c, 'image/jpeg', p.modo === 'portada' ? Math.max(jpeg, 0.9) : jpeg);
-      partes.push({ tipo: 'jpeg', bytes: new Uint8Array(await b.arrayBuffer()) });
+      return { tipo: 'bits', bytes: await comprimir(aBits(img)), ancho: c.width, alto: c.height };
     }
-    if (conTexto && p.ocr?.lineas?.length) partes[partes.length - 1].texto = p.ocr;
+    // Una portada es solo letras: siempre con buena calidad
+    const b = await canvasABlob(c, 'image/jpeg', p.modo === 'portada' ? Math.max(jpeg, 0.9) : jpeg);
+    return { tipo: 'jpeg', bytes: new Uint8Array(await b.arrayBuffer()) };
+  } finally {
     c.width = c.height = 0; // soltar la memoria del canvas ya
   }
+}
+
+/**
+ * Las páginas listas para el PDF (imagen y texto) con esa resolución y calidad de JPEG.
+ * Se arman de a una en el worker: aquí, en el iPhone, guardar cada JPEG trababa la pantalla.
+ */
+async function partesDe(paginas, { maxLado, jpeg }, conTexto, alAvanzar, marcaDeAgua = '') {
+  const enWorker = await fotosEnWorker(), conLetras = enWorker && await letrasEnWorker();
+  const partes = [];
+  for (let i = 0; i < paginas.length; i++) {
+    alAvanzar?.(i, paginas.length);
+    await respirar();
+    const p = paginas[i];
+    // Las notas y la marca de agua llevan letras: solo en el worker si allí se pueden escribir
+    const letras = !!marcaDeAgua || !!p.marcas?.some(m => m.tipo === 'nota');
+    let parte = null;
+    if (enWorker && (conLetras || !letras)) {
+      try {
+        parte = await paginaPDFEnWorker(p.procesada, { maxLado, jpeg, bn: p.filtro === 'bn', marcas: p.marcas || [], marcaDeAgua, portada: p.modo === 'portada' });
+      } catch (e) { console.warn('Página del PDF en la página:', e); }
+    }
+    parte = parte || await parteEnLaPagina(p, { maxLado, jpeg }, marcaDeAgua);
+    if (conTexto && p.ocr?.lineas?.length) parte.texto = p.ocr;
+    partes.push(parte);
+  }
   alAvanzar?.(paginas.length, paginas.length);
+  await respirar();
   return partes;
 }
 

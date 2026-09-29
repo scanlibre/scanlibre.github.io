@@ -40,6 +40,7 @@ export async function buscarHoja(fuente) {
  * La foto (de la cámara o de la galería) lista para usar: orientada, sin
  * pasar de ladoFoto() y en JPEG, con una vista chica para el recorte y la
  * miniatura. Si se puede, todo se hace en el worker: la página no se traba.
+ * @param archivo el archivo de la foto (Blob) o el cuadro del video (ImageBitmap, que se entrega al worker)
  * @param hoja    buscar las esquinas de la hoja
  * @param nitidez medir si la hoja salió borrosa
  * @returns { blob, ancho, alto, anchoOriginal, altoOriginal, vista, esquinas, borrosa, ms }
@@ -49,7 +50,11 @@ export async function prepararFoto(archivo, { hoja = true, nitidez = false } = {
   const inicio = performance.now();
   let foto;
   if (await fotosEnWorker()) {
-    try { foto = await fotoEnWorker(archivo, { maxLado: ladoFoto(), vista: ladoVista(), hoja, nitidez }); } catch (e) { console.warn('Foto en la página:', e); }
+    try { foto = await fotoEnWorker(archivo, { maxLado: ladoFoto(), vista: ladoVista(), hoja, nitidez }); } catch (e) {
+      // El cuadro del video ya se entregó al worker: no se puede volver a usar aquí
+      if (typeof ImageBitmap !== 'undefined' && archivo instanceof ImageBitmap) throw e;
+      console.warn('Foto en la página:', e);
+    }
   }
   if (!foto) {
     // Sin OffscreenCanvas en el worker: como antes, aquí en la página

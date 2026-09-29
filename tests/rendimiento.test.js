@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { crearEntorno, importarFoto, leerBase, guardarPNG, videoDeImagen } from './ayuda.js';
+import { crearEntorno, importarFoto, leerBase, guardarPNG, videoDeImagen, descargarPDF, fotoConTexto } from './ayuda.js';
 import { crearEscena, ESCENAS } from './escenas.js';
 
 // Una foto de 12 MP (3000 × 4000), como la de muchos teléfonos
@@ -38,6 +38,42 @@ function espiarLiviano() {
     ImageCapture.prototype.takePhoto = function (pedido) { window.__pedido = pedido || {}; return tomar.call(this, {}); };
   }
 }
+
+// Anota cada lectura de píxeles y cada imagen que se guarda (toBlob, toDataURL) en el hilo principal:
+// en el iPhone, Safari guarda las imágenes en el hilo de la página y la pantalla se traba
+function espiarPagina() {
+  window.__lecturas = []; window.__guardadas = [];
+  const leer = CanvasRenderingContext2D.prototype.getImageData;
+  CanvasRenderingContext2D.prototype.getImageData = function (x, y, w, h, ...resto) { window.__lecturas.push(w * h); return leer.call(this, x, y, w, h, ...resto); };
+  for (const metodo of ['toBlob', 'toDataURL']) {
+    const original = HTMLCanvasElement.prototype[metodo];
+    HTMLCanvasElement.prototype[metodo] = function (...args) { window.__guardadas.push(this.width * this.height); return original.apply(this, args); };
+  }
+}
+// Lo mismo, con las páginas nuevas en blanco y negro
+function espiarPaginaBN() {
+  localStorage.setItem('scanlibre_ajustes', JSON.stringify({ ...JSON.parse(localStorage.getItem('scanlibre_ajustes') || '{}'), filtro: 'bn' }));
+  window.__lecturas = []; window.__guardadas = [];
+  const leer = CanvasRenderingContext2D.prototype.getImageData;
+  CanvasRenderingContext2D.prototype.getImageData = function (x, y, w, h, ...resto) { window.__lecturas.push(w * h); return leer.call(this, x, y, w, h, ...resto); };
+  for (const metodo of ['toBlob', 'toDataURL']) {
+    const original = HTMLCanvasElement.prototype[metodo];
+    HTMLCanvasElement.prototype[metodo] = function (...args) { window.__guardadas.push(this.width * this.height); return original.apply(this, args); };
+  }
+}
+// Como en el iPhone: sin foto completa (ImageCapture), la foto es el cuadro del video
+function espiarSinFotoCompleta() {
+  delete window.ImageCapture;
+  window.__lecturas = []; window.__guardadas = [];
+  const leer = CanvasRenderingContext2D.prototype.getImageData;
+  CanvasRenderingContext2D.prototype.getImageData = function (x, y, w, h, ...resto) { window.__lecturas.push(w * h); return leer.call(this, x, y, w, h, ...resto); };
+  for (const metodo of ['toBlob', 'toDataURL']) {
+    const original = HTMLCanvasElement.prototype[metodo];
+    HTMLCanvasElement.prototype[metodo] = function (...args) { window.__guardadas.push(this.width * this.height); return original.apply(this, args); };
+  }
+}
+const aCero = page => page.evaluate(() => { window.__lecturas = []; window.__guardadas = []; });
+const enLaPagina = page => page.evaluate(() => ({ leidos: Math.max(0, ...window.__lecturas), guardados: Math.max(0, ...window.__guardadas) }));
 
 const lado = (a, b) => Math.max(a, b);
 
@@ -103,6 +139,19 @@ describe('Rendimiento: la cámara', () => {
     assert.deepEqual(page.errores, []);
   });
 
+  it('sin foto completa (como en el iPhone), el cuadro del video se guarda en el worker, no en la página', async () => {
+    const page = await env.pagina({ antes: espiarSinFotoCompleta });
+    await tomarYGuardar(page);
+    const { leidos, guardados } = await enLaPagina(page);
+    const diag = await page.evaluate(() => JSON.parse(localStorage.getItem('scanlibre_camara')));
+    assert.match(diag.origen, /^cuadro del video/);
+    assert.ok(guardados <= 1e5, `la página guardó una imagen de ${guardados} píxeles`);
+    assert.ok(leidos <= 1e6, `el hilo principal leyó ${leidos} píxeles de una vez`);
+    const [p] = (await leerBase(page)).paginas;
+    assert.ok(p.original > 10000 && p.procesada > 10000, 'la foto y la página quedaron guardadas');
+    assert.deepEqual(page.errores, []);
+  });
+
   it('en gama baja pide la foto más chica (3000 px)', async () => {
     const page = await env.pagina({ antes: espiarLiviano });
     await tomarYGuardar(page);
@@ -112,5 +161,65 @@ describe('Rendimiento: la cámara', () => {
     const [p] = (await leerBase(page)).paginas;
     assert.ok(lado(p.ancho, p.alto) <= 3000 && lado(p.procAncho, p.procAlto) <= 2400, JSON.stringify([p.ancho, p.alto, p.procAncho, p.procAlto]));
     assert.deepEqual(page.errores, []);
+  });
+});
+
+describe('Rendimiento: el PDF y el texto se arman fuera de la página', () => {
+  let env, foto, conTexto;
+  before(async () => {
+    env = await crearEntorno();
+    foto = guardarPNG(grande(), 'grande-12mp-pdf.png');
+    conTexto = await fotoConTexto('rendimiento-texto.png', ['La célula es la unidad básica de la vida.', 'Todos los seres vivos están hechos de células.']);
+  });
+  after(async () => { await env.cerrar(); });
+
+  it('el PDF en blanco y negro no lee ni guarda imágenes grandes en la página', async () => {
+    const page = await env.pagina({ antes: espiarPaginaBN });
+    await importarFoto(page, foto);
+    await aCero(page);
+    const { texto } = await descargarPDF(page);
+    const { leidos, guardados } = await enLaPagina(page);
+    assert.ok(leidos <= 1e5 && guardados <= 1e5, `en la página: ${leidos} píxeles leídos, ${guardados} guardados`);
+    assert.match(texto, /\/BitsPerComponent 1/, 'la página va en blanco y negro de 1 bit');
+    assert.match(texto, /^%PDF-/);
+    assert.deepEqual(page.errores, []);
+  });
+
+  it('con marca de agua, la página también se arma en el worker y lleva la marca', async () => {
+    const page = await env.pagina({ antes: espiarPagina });
+    await importarFoto(page, foto);
+    await aCero(page);
+    await page.click('#doc-pdf');
+    await page.click('dialog .opcion:has-text("Marca de agua")');
+    await page.fill('dialog .campo-marca .campo', 'Solo para trámite');
+    await page.click('dialog .hoja-botones .boton-primario');
+    await page.waitForSelector('.resultado-pdf', { timeout: 60000 });
+    assert.match(await page.textContent('.resultado-pdf small'), /con marca de agua/);
+    const { leidos, guardados } = await enLaPagina(page);
+    assert.ok(leidos <= 1e5 && guardados <= 1e5, `en la página: ${leidos} píxeles leídos, ${guardados} guardados`);
+    assert.deepEqual(page.errores, []);
+  });
+
+  it('sin OffscreenCanvas en el worker, el PDF se arma en la página y sale igual', async () => {
+    const page = await env.pagina({ antes: () => {
+      localStorage.setItem('scanlibre_fotos_en_pagina', '1');
+      localStorage.setItem('scanlibre_ajustes', JSON.stringify({ filtro: 'bn' }));
+    } });
+    await importarFoto(page, foto);
+    const { texto } = await descargarPDF(page);
+    assert.match(texto, /\/BitsPerComponent 1/);
+    assert.deepEqual(page.errores, []);
+  });
+
+  it('leer el texto de la página no pasa la imagen por un canvas de la página', async () => {
+    const page = await env.pagina({ antes: espiarPagina });
+    await importarFoto(page, conTexto);
+    await page.click('#doc-paginas .miniatura');
+    await aCero(page);
+    await page.click('#pagina-texto');
+    await page.waitForFunction(() => /célula/.test(document.querySelector('.texto-leido')?.value || ''), null, { timeout: 90000 });
+    const { leidos, guardados } = await enLaPagina(page);
+    assert.ok(leidos <= 1e5 && guardados <= 1e5, `en la página: ${leidos} píxeles leídos, ${guardados} guardados`);
+    assert.deepEqual(page.errores.filter(e => !/too small to scale|cannot be recognized|Empty page/i.test(e)), []);
   });
 });

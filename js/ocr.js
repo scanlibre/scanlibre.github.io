@@ -6,7 +6,7 @@
 // contraste y nitidez. Así lee también la letra chica de un libro.
 
 import { abrirFoto, aImageData, soltarCanvas } from './fotos.js';
-import { paraLeer } from './motor.js';
+import { paraLeer, fotosEnWorker, paraLeerEnWorker } from './motor.js';
 
 const BASE = new URL('../vendor/tesseract/', import.meta.url).href;
 
@@ -60,8 +60,15 @@ function cerrarLuego() {
   }, 60000);
 }
 
-/** La página lista para leer, en un canvas */
+/**
+ * La página lista para leer. Si se puede, se arma en el worker y llega en PNG
+ * (en el iPhone, armarla aquí y pasarla por un canvas trababa la pantalla
+ * varios segundos); si no, en un canvas aquí.
+ */
 async function prepararImagen(blob) {
+  if (await fotosEnWorker()) {
+    try { return await paraLeerEnWorker(blob); } catch (e) { console.warn('Lectura en la página:', e); }
+  }
   const foto = await abrirFoto(blob);
   const img = aImageData(foto);
   foto.close?.();

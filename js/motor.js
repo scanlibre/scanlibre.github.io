@@ -5,7 +5,7 @@
 // se arma una página, la cámara sigue marcando la hoja. Si el navegador no
 // puede abrir un worker de módulo, las mismas funciones corren aquí mismo.
 
-const workers = {};   // 'vivo' | 'pesado' → { worker, listo: Promise<{ lienzo } | false> }
+const workers = {};   // 'vivo' | 'pesado' → { worker, listo: Promise<{ lienzo, letras } | false> }
 let siguiente = 1, directo = null;
 const pendientes = new Map();
 
@@ -32,7 +32,7 @@ function abrirWorker(cual) {
       caido(cual, new Error('El trabajo de imagen se detuvo (¿poca memoria?)'));
     };
     w.worker.onmessage = e => {
-      if (e.data.hola) { saludo = true; clearTimeout(reloj); resolver({ lienzo: !!e.data.lienzo }); return; }
+      if (e.data.hola) { saludo = true; clearTimeout(reloj); resolver({ lienzo: !!e.data.lienzo, letras: !!e.data.letras }); return; }
       const p = pendientes.get(e.data.id);
       if (!p) return;
       pendientes.delete(e.data.id);
@@ -61,6 +61,12 @@ export async function fotosEnWorker() {
   return !!(r && r.lienzo && workers.pesado.worker);
 }
 
+/** ¿El worker además puede escribir letras? (las notas y la marca de agua del PDF) */
+export async function letrasEnWorker() {
+  const r = (await fotosEnWorker()) && await abrirWorker('pesado');
+  return !!(r && r.letras);
+}
+
 /** @param limite ms: si el worker no contesta en ese tiempo, se da por caído */
 async function pedir(mensaje, transferir, cual = 'pesado', limite = 0) {
   if (!(await abrirWorker(cual)) || !workers[cual].worker) {
@@ -70,7 +76,7 @@ async function pedir(mensaje, transferir, cual = 'pesado', limite = 0) {
     if (mensaje.tipo === 'lectura') return directo.prepararParaLeer(mensaje.imagen);
     if (mensaje.tipo === 'luz') return directo.aplicarFiltro(mensaje.imagen, mensaje.opciones.filtro, mensaje.opciones);
     if (mensaje.tipo === 'libro') return directo.dividirLibro(mensaje.imagen, mensaje.opciones.esquinas);
-    if (mensaje.tipo === 'foto' || mensaje.tipo === 'pagina') throw new Error('Sin worker para fotos');
+    if (['foto', 'pagina', 'paginaPDF', 'paraLeer'].includes(mensaje.tipo)) throw new Error('Sin worker para fotos');
     return directo.procesarPagina(mensaje.imagen, mensaje.opciones);
   }
   const id = siguiente++;
@@ -84,10 +90,24 @@ async function pedir(mensaje, transferir, cual = 'pesado', limite = 0) {
 /**
  * La foto lista en el worker (ver fotosEnWorker): orientada, sin pasar de
  * `maxLado`, en JPEG y con una vista chica (ImageBitmap) para mostrarla.
+ * @param fuente el archivo (Blob) o el cuadro del video (ImageBitmap: se entrega al worker)
  * @returns { blob, ancho, alto, anchoOriginal, altoOriginal, vista, esquinas, borrosa, ms }
  */
-export const fotoEnWorker = (blob, { maxLado, vista, hoja = true, nitidez = false } = {}) =>
-  pedir({ tipo: 'foto', blob, maxLado, vista, hoja, nitidez }, undefined, 'pesado', 60000);
+export function fotoEnWorker(fuente, { maxLado, vista, hoja = true, nitidez = false } = {}) {
+  const cuadro = typeof ImageBitmap !== 'undefined' && fuente instanceof ImageBitmap;
+  return pedir({ tipo: 'foto', [cuadro ? 'bitmap' : 'blob']: fuente, maxLado, vista, hoja, nitidez }, cuadro ? [fuente] : undefined, 'pesado', 60000);
+}
+
+/**
+ * Una página del PDF armada en el worker: achicada, con marcas y en JPEG
+ * (o en blanco y negro de 1 bit comprimido).
+ * @returns { tipo: 'jpeg', bytes } | { tipo: 'bits', bytes, ancho, alto }
+ */
+export const paginaPDFEnWorker = (blob, { maxLado, jpeg, bn = false, marcas = [], marcaDeAgua = '', portada = false }) =>
+  pedir({ tipo: 'paginaPDF', blob, maxLado, jpeg, bn, marcas, marcaDeAgua, portada }, undefined, 'pesado', 60000);
+
+/** La página lista para el lector de texto, armada en el worker desde su archivo (PNG) */
+export const paraLeerEnWorker = blob => pedir({ tipo: 'paraLeer', blob }, undefined, 'pesado', 90000);
 
 /**
  * La página armada en el worker desde el archivo de la foto.

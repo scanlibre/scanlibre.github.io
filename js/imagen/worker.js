@@ -4,6 +4,8 @@
 // guarda la foto: la página solo recibe los archivos listos y una vista chica.
 
 import { detectarHoja, procesarPagina, nitidezDeHoja, medirNitidez, prepararParaLeer, dividirLibro, aplicarFiltro } from './procesar.js';
+import { dibujarMarcas, dibujarMarcaDeAgua } from '../marcas.js';
+import { aBits } from '../pdf.js';
 
 const TODA_LA_FOTO = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }];
 
@@ -11,6 +13,18 @@ const TODA_LA_FOTO = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y:
 const hayLienzo = (() => {
   try { return typeof createImageBitmap === 'function' && !!new OffscreenCanvas(1, 1).getContext('2d') && 'convertToBlob' in OffscreenCanvas.prototype; }
   catch (e) { return false; }
+})();
+
+// ¿Se pueden escribir letras? (las notas y la marca de agua; algunos Safari no dibujan texto aquí)
+const hayLetras = hayLienzo && (() => {
+  try {
+    const c = new OffscreenCanvas(40, 20), ctx = c.getContext('2d');
+    ctx.font = '16px sans-serif';
+    ctx.fillText('Hola', 2, 16);
+    const d = ctx.getImageData(0, 0, 40, 20).data;
+    for (let i = 3; i < d.length; i += 4) if (d[i]) return true;
+    return false;
+  } catch (e) { return false; }
 })();
 
 function lienzo(w, h) {
@@ -40,11 +54,12 @@ const abrir = blob => createImageBitmap(blob, { imageOrientation: 'from-image' }
 /**
  * Una foto recién tomada (o de la galería): orientada, sin pasar de `maxLado`
  * y en JPEG, con una vista chica para mostrarla. Con `hoja` se buscan sus
- * esquinas y con `nitidez`, si salió borrosa.
+ * esquinas y con `nitidez`, si salió borrosa. Puede llegar como archivo
+ * (`blob`) o como el cuadro del video ya abierto (`bitmap`, en el iPhone).
  */
-async function foto({ blob, maxLado = 4000, vista = 2000, hoja = true, nitidez = false }) {
+async function foto({ blob, bitmap, maxLado = 4000, vista = 2000, hoja = true, nitidez = false }) {
   const inicio = performance.now();
-  const bmp = await abrir(blob);
+  const bmp = bitmap || await abrir(blob);
   const anchoOriginal = bmp.width, altoOriginal = bmp.height;
   const [w, h] = medida(bmp.width, bmp.height, maxLado);
   const [c, ctx] = lienzo(w, h);
@@ -89,15 +104,62 @@ async function pagina({ blob, opciones, png = false }) {
   return { procesada, miniatura, procAncho: r.width, procAlto: r.height, nitidez: r.nitidez, aplanada: r.aplanada, sinDedos: r.sinDedos };
 }
 
+async function comprimir(bytes) {
+  const flujo = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate'));
+  return new Uint8Array(await new Response(flujo).arrayBuffer());
+}
+
+/**
+ * Una página lista para el PDF: achicada a `maxLado`, con sus marcas y la
+ * marca de agua, en JPEG, o en blanco y negro de 1 bit comprimido.
+ */
+async function paginaPDF({ blob, maxLado, jpeg, bn = false, marcas = [], marcaDeAgua = '', portada = false }) {
+  const bmp = await abrir(blob);
+  const [w, h] = medida(bmp.width, bmp.height, maxLado);
+  const [c, ctx] = lienzo(w, h);
+  ctx.drawImage(bmp, 0, 0, w, h);
+  bmp.close();
+  try {
+    if (marcas.length) dibujarMarcas(ctx, marcas, w, h);
+    if (marcaDeAgua) dibujarMarcaDeAgua(ctx, marcaDeAgua, w, h);
+    if (bn && !marcas.length && !marcaDeAgua && typeof CompressionStream !== 'undefined') {
+      const bytes = await comprimir(aBits(ctx.getImageData(0, 0, w, h)));
+      return { resultado: { tipo: 'bits', bytes, ancho: w, alto: h }, transferir: [bytes.buffer] };
+    }
+    // Una portada es solo letras: siempre con buena calidad
+    const archivo = await c.convertToBlob({ type: 'image/jpeg', quality: portada ? Math.max(jpeg, 0.9) : jpeg });
+    const bytes = new Uint8Array(await archivo.arrayBuffer());
+    return { resultado: { tipo: 'jpeg', bytes }, transferir: [bytes.buffer] };
+  } finally {
+    soltar(c);
+  }
+}
+
+/** La página lista para el lector de texto, desde su archivo: en gris, pareja y con nitidez, en PNG */
+async function paraLeer({ blob }) {
+  const bmp = await abrir(blob);
+  const img = pixeles(bmp);
+  bmp.close();
+  const r = prepararParaLeer(img);
+  const [c, ctx] = lienzo(r.width, r.height);
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(r.data.buffer, r.data.byteOffset, r.data.length), r.width, r.height), 0, 0);
+  try { return await c.convertToBlob({ type: 'image/png' }); } finally { soltar(c); }
+}
+
 self.onmessage = async e => {
   const { id, tipo, imagen, opciones } = e.data;
-  if (tipo === 'hola') return self.postMessage({ hola: true, lienzo: hayLienzo });
+  if (tipo === 'hola') return self.postMessage({ hola: true, lienzo: hayLienzo, letras: hayLetras });
   try {
     if (tipo === 'foto') {
       const { resultado, transferir } = await foto(e.data);
       self.postMessage({ id, resultado }, transferir);
     } else if (tipo === 'pagina') {
       self.postMessage({ id, resultado: await pagina(e.data) });
+    } else if (tipo === 'paginaPDF') {
+      const { resultado, transferir } = await paginaPDF(e.data);
+      self.postMessage({ id, resultado }, transferir);
+    } else if (tipo === 'paraLeer') {
+      self.postMessage({ id, resultado: await paraLeer(e.data) });
     } else if (tipo === 'detectar') {
       self.postMessage({ id, resultado: detectarHoja(imagen) });
     } else if (tipo === 'procesar') {

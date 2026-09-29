@@ -9,7 +9,7 @@
 import { $, aviso, menu } from '../util.js';
 import { ir, volver } from '../rutas.js';
 import { ajustes, cambiarAjuste, modoCamara } from '../ajustes.js';
-import { detectar, nitidez } from '../motor.js';
+import { detectar, nitidez, fotosEnWorker } from '../motor.js';
 import { aCanvas, aImageData, canvasABlob, soltarCanvas, abrirFoto } from '../fotos.js';
 import { gamaBaja, ladoFoto, pausaDeteccion, videoIdeal } from '../rendimiento.js';
 import { caraDeCedula } from '../cedula.js';
@@ -454,7 +454,7 @@ async function tomarFoto() {
       const pedido = { ...(pedidoFoto.tamano || {}) };
       // Sin flash: en papel deja un reflejo blanco (la luz de la linterna sí se respeta)
       if (pedidoFoto.sinFlash && $('#camara-linterna').getAttribute('aria-pressed') !== 'true') pedido.fillLightMode = 'off';
-      return { blob: await conLimite(capturador.takePhoto(pedido), 8000), origen: 'foto completa' };
+      return { archivo: await conLimite(capturador.takePhoto(pedido), 8000), origen: 'foto completa' };
     } catch (e) {
       fotoCompletaFalla = true; // en este teléfono no sirve: se usa el cuadro del video
       motivoFalla = e.message;
@@ -464,7 +464,13 @@ async function tomarFoto() {
     }
   }
   if (!video.videoWidth) throw new Error('La cámara todavía no está lista');
-  return { blob: await canvasABlob(aCanvas(video), 'image/jpeg', 0.95), origen: 'cuadro del video' + (motivoFalla ? ` (la foto completa falló: ${motivoFalla})` : '') };
+  const origen = 'cuadro del video' + (motivoFalla ? ` (la foto completa falló: ${motivoFalla})` : '');
+  // El cuadro va tal cual al worker, que lo guarda en JPEG: en el iPhone (sin
+  // foto completa), guardarlo aquí trababa la pantalla al tomar la foto
+  if (await fotosEnWorker()) {
+    try { return { archivo: await createImageBitmap(video), origen }; } catch (e) {}
+  }
+  return { archivo: await canvasABlob(aCanvas(video), 'image/jpeg', 0.95), origen };
 }
 
 async function asegurarDocumento() {
@@ -518,13 +524,13 @@ async function disparar(auto = false) {
     // Algunos teléfonos tardan en tomar la foto completa: el aviso sigue hasta que llega
     ponerPista('Tomando la foto… no te muevas', true);
     const inicio = performance.now();
-    const { blob, origen } = await tomarFoto();
+    const { archivo, origen } = await tomarFoto();
     const ms = Math.round(performance.now() - inicio);
     vista.classList.remove('tomando');
     destello();
     ponerPista('Foto tomada', true);
     marcarTomada();
-    await usarFoto(blob, origen, { auto, ms });
+    await usarFoto(archivo, origen, { auto, ms });
   } catch (e) {
     console.error(e);
     aviso('No se pudo tomar la foto. Intenta de nuevo.', 'error');
@@ -539,7 +545,8 @@ async function disparar(auto = false) {
  * Si la tomó la captura automática y salió borrosa, se descarta y se repite
  * (hasta 2 veces); si no, el recorte avisa.
  */
-async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, ms = null } = {}) {
+/** @param archivo la foto (Blob) o el cuadro del video (ImageBitmap) */
+async function usarFoto(archivo, origen = 'cámara del teléfono', { auto = false, ms = null } = {}) {
   // Al volver a tomar una página es una sola hoja, con el filtro de siempre
   const modo = sesion.reemplazar ? 'hoja' : modoCamara();
   // La cédula siempre pasa por el recorte: hay que ver bien cada cara
@@ -548,7 +555,7 @@ async function usarFoto(blob, origen = 'cámara del teléfono', { auto = false, 
   const opciones = modo === 'pizarra' ? { filtro: 'pizarra' } : {};
   // Todo en el worker: abrirla, achicarla, guardarla, buscar la hoja y ver si salió borrosa
   const revisar = !rafaga || auto;
-  const foto = await prepararFoto(blob, { hoja: true, nitidez: revisar && ajustes().filtro !== 'dibujo' });
+  const foto = await prepararFoto(archivo, { hoja: true, nitidez: revisar && ajustes().filtro !== 'dibujo' });
   guardarDiagnostico({
     video: video.videoWidth ? `${video.videoWidth} × ${video.videoHeight}` : 'sin video',
     foto: `${foto.anchoOriginal} × ${foto.altoOriginal}`,
