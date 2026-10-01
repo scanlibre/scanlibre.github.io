@@ -11,6 +11,7 @@ import { abrirFoto, canvasABlob, soltarCanvas } from '../fotos.js';
 import { FILTROS } from '../imagen/filtros.js';
 import { ajustes, cambiarAjuste } from '../ajustes.js';
 import { abrirRecorte } from './recorte.js';
+import { crearZoom } from '../visorZoom.js';
 import { mostrarTexto } from './texto.js';
 import { editarPortada } from './portada.js';
 import { mostrarCodigo } from './codigo.js';
@@ -18,6 +19,7 @@ import { puedeCompartir, compartir, descargar } from '../exportar.js';
 
 let doc = null, pagina = null, n = 1, url = null, trabajando = false, turnoImagen = 0;
 let luz = null; // mientras se ajusta el brillo: { base, brillo, contraste, ocupado, otra }
+let zoom = null; // acercar la página (pellizcar, doble toque, arrastrar)
 const ruta = (...partes) => ['doc', encodeURIComponent(doc.id), ...partes].join('/');
 
 export async function mostrar(params) {
@@ -40,6 +42,7 @@ export function ocultar() {
 function pintar() {
   const total = doc.paginas.length;
   $('#pagina-titulo').textContent = `Página ${n} de ${total}`;
+  zoom?.reset();
   const imagen = ponerImagen();
   for (const b of $('#pagina-filtros').children) b.setAttribute('aria-pressed', String(b.dataset.filtro === pagina.filtro));
   $('#pagina-anterior').disabled = n <= 1;
@@ -119,6 +122,7 @@ async function abrirLuz() {
   $('#pagina-luz-bn').hidden = !bn;
   $('#pagina-filtros').hidden = $('#pagina-herramientas').hidden = true;
   $('#pagina-anterior').disabled = $('#pagina-siguiente').disabled = true;
+  zoom?.reset();
   $('#pagina-luz').hidden = false;
   verLuz();
 }
@@ -322,6 +326,7 @@ const separarYa = () => conEspera(async () => {
 });
 
 export function iniciar() {
+  zoom = crearZoom($('.pagina-hoja'), $('#pagina-imagen'));
   $('#pagina-filtros').replaceChildren(...Object.entries(FILTROS).map(([valor, texto]) =>
     el('button', { class: 'filtro', 'data-filtro': valor, 'aria-pressed': 'false', onclick: () => {
       if (!pagina || pagina.filtro === valor) return;

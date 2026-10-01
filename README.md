@@ -47,6 +47,7 @@ Es una app web instalable (PWA): funciona en Android, iPhone y en la computadora
 - **Respaldo gratis:** todos los documentos en un `.zip` para guardar donde quieras y restaurarlos en otro teléfono. Si pasa tiempo sin respaldar (una semana con el primer documento, después cada 30 días con cambios), el inicio lo recuerda.
 - **Bloqueo con PIN o huella** (opcional): quien use tu teléfono desbloqueado no puede ver tus documentos. Del PIN solo se guarda una huella (PBKDF2), después de 5 intentos fallidos hay que esperar, y la huella, la cara o el bloqueo del teléfono se usan con WebAuthn. Se sugiere al guardar una cédula.
 - **App de Android** para Google Play (Trusted Web Activity): la misma app a pantalla completa, que se actualiza sola con la web. Ver [`android/LEEME.md`](android/LEEME.md).
+- **Acercar la página** para revisar el detalle: pellizcar con dos dedos, doble toque, y arrastrar cuando está acercada.
 - **Tema claro u oscuro** según el teléfono. Las páginas escaneadas nunca se invierten.
 
 ## Cómo funciona por dentro
