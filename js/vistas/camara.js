@@ -9,7 +9,7 @@
 import { $, aviso, menu } from '../util.js';
 import { ir, volver } from '../rutas.js';
 import { ajustes, cambiarAjuste, modoCamara } from '../ajustes.js';
-import { detectar, nitidez, fotosEnWorker } from '../motor.js';
+import { detectar, nitidez } from '../motor.js';
 import { aCanvas, aImageData, canvasABlob, soltarCanvas, abrirFoto } from '../fotos.js';
 import { gamaBaja, ladoFoto, pausaDeteccion, videoIdeal } from '../rendimiento.js';
 import { caraDeCedula } from '../cedula.js';
@@ -464,12 +464,11 @@ async function tomarFoto() {
     }
   }
   if (!video.videoWidth) throw new Error('La cámara todavía no está lista');
+  // El cuadro del video se guarda en JPEG aquí mismo: es el camino probado y
+  // siempre sale una foto correcta. (Pasar el cuadro al worker como ImageBitmap
+  // daba fotos dañadas en algunos teléfonos; no vale la pena por ahorrar un
+  // instante en el momento de la foto.)
   const origen = 'cuadro del video' + (motivoFalla ? ` (la foto completa falló: ${motivoFalla})` : '');
-  // El cuadro va tal cual al worker, que lo guarda en JPEG: en el iPhone (sin
-  // foto completa), guardarlo aquí trababa la pantalla al tomar la foto
-  if (await fotosEnWorker()) {
-    try { return { archivo: await createImageBitmap(video), origen }; } catch (e) {}
-  }
   return { archivo: await canvasABlob(aCanvas(video), 'image/jpeg', 0.95), origen };
 }
 
